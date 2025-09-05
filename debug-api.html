@@ -1,0 +1,218 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>API调试页面</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            max-width: 800px;
+            margin: 50px auto;
+            padding: 20px;
+            background-color: #f5f5f5;
+        }
+
+        .container {
+            background: white;
+            padding: 30px;
+            border-radius: 10px;
+            box-shadow: 0 2px 10px rgba(0, 0, 0, 0.1);
+        }
+
+        .section {
+            margin-bottom: 30px;
+            padding: 20px;
+            border: 1px solid #ddd;
+            border-radius: 5px;
+        }
+
+        button {
+            background: #4CAF50;
+            color: white;
+            padding: 10px 20px;
+            border: none;
+            border-radius: 5px;
+            cursor: pointer;
+            margin: 5px;
+        }
+
+        button:hover {
+            background: #45a049;
+        }
+
+        .result {
+            margin-top: 10px;
+            padding: 10px;
+            background: #f9f9f9;
+            border-radius: 5px;
+            white-space: pre-wrap;
+            font-family: monospace;
+        }
+
+        .error {
+            background: #ffebee;
+            color: #c62828;
+        }
+
+        .success {
+            background: #e8f5e8;
+            color: #2e7d32;
+        }
+
+        input {
+            padding: 8px;
+            margin: 5px;
+            border: 1px solid #ddd;
+            border-radius: 3px;
+            width: 200px;
+        }
+    </style>
+</head>
+
+<body>
+    <div class="container">
+        <h1>🔍 ChatApp API调试工具</h1>
+
+        <div class="section">
+            <h3>1. 测试后端连接</h3>
+            <button onclick="testBackendConnection()">测试后端连接</button>
+            <div id="connection-result" class="result"></div>
+        </div>
+
+        <div class="section">
+            <h3>2. 测试登录API</h3>
+            <input type="text" id="login-username" placeholder="用户名" value="zhangsan">
+            <input type="password" id="login-password" placeholder="密码" value="123456">
+            <button onclick="testLogin()">测试登录</button>
+            <div id="login-result" class="result"></div>
+        </div>
+
+        <div class="section">
+            <h3>3. 测试注册API</h3>
+            <input type="text" id="reg-username" placeholder="用户名" value="testuser">
+            <input type="text" id="reg-nickname" placeholder="昵称" value="测试用户">
+            <input type="email" id="reg-email" placeholder="邮箱" value="test@example.com">
+            <input type="password" id="reg-password" placeholder="密码" value="123456">
+            <br>
+            <button onclick="testRegister()">测试注册</button>
+            <div id="register-result" class="result"></div>
+        </div>
+
+        <div class="section">
+            <h3>4. 测试用户名检查</h3>
+            <input type="text" id="check-username" placeholder="用户名" value="testuser">
+            <button onclick="testCheckUsername()">检查用户名</button>
+            <div id="check-result" class="result"></div>
+        </div>
+    </div>
+
+    <script>
+        const API_BASE = 'http://localhost:8080/api';
+
+        function log(elementId, message, isError = false) {
+            const element = document.getElementById(elementId);
+            element.textContent = message;
+            element.className = `result ${isError ? 'error' : 'success'}`;
+        }
+
+        async function testBackendConnection() {
+            log('connection-result', '正在测试连接...');
+            try {
+                const response = await fetch(`${API_BASE}/auth/check-username?username=test`);
+                if (response.ok) {
+                    const data = await response.json();
+                    log('connection-result', `✅ 后端连接成功！\n响应: ${JSON.stringify(data, null, 2)}`);
+                } else {
+                    log('connection-result', `❌ 后端响应错误: ${response.status} ${response.statusText}`, true);
+                }
+            } catch (error) {
+                log('connection-result', `❌ 无法连接到后端: ${error.message}\n\n请确保:\n1. 后端服务正在运行 (http://localhost:8080)\n2. MySQL数据库已创建\n3. 防火墙没有阻止连接`, true);
+            }
+        }
+
+        async function testLogin() {
+            const username = document.getElementById('login-username').value;
+            const password = document.getElementById('login-password').value;
+
+            log('login-result', '正在测试登录...');
+            try {
+                const response = await fetch(`${API_BASE}/auth/login`, {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                    },
+                    body: JSON.stringify({ username, password })
+                });
+
+                const data = await response.json();
+                if (response.ok) {
+                    log('login-result', `✅ 登录成功！\n响应: ${JSON.stringify(data, null, 2)}`);
+                } else {
+                    log('login-result', `❌ 登录失败: ${data.message || '未知错误'}`, true);
+                }
+            } catch (error) {
+                log('login-result', `❌ 登录请求失败: ${error.message}`, true);
+            }
+        }
+
+        async function testRegister() {
+            const username = document.getElementById('reg-username').value;
+            const nickname = document.getElementById('reg-nickname').value;
+            const email = document.getElementById('reg-email').value;
+            const password = document.getElementById('reg-password').value;
+
+            log('register-result', '正在测试注册...');
+            try {
+                const response = await fetch(`${API_BASE}/auth/register`, {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                    },
+                    body: JSON.stringify({
+                        username,
+                        nickname,
+                        email,
+                        password,
+                        confirmPassword: password
+                    })
+                });
+
+                const data = await response.json();
+                if (response.ok) {
+                    log('register-result', `✅ 注册成功！\n响应: ${JSON.stringify(data, null, 2)}`);
+                } else {
+                    log('register-result', `❌ 注册失败: ${data.message || '未知错误'}\n完整响应: ${JSON.stringify(data, null, 2)}`, true);
+                }
+            } catch (error) {
+                log('register-result', `❌ 注册请求失败: ${error.message}`, true);
+            }
+        }
+
+        async function testCheckUsername() {
+            const username = document.getElementById('check-username').value;
+
+            log('check-result', '正在检查用户名...');
+            try {
+                const response = await fetch(`${API_BASE}/auth/check-username?username=${username}`);
+                const data = await response.json();
+
+                if (response.ok) {
+                    log('check-result', `✅ 检查成功！\n用户名 "${username}" ${data.data ? '可用' : '已被使用'}\n响应: ${JSON.stringify(data, null, 2)}`);
+                } else {
+                    log('check-result', `❌ 检查失败: ${data.message || '未知错误'}`, true);
+                }
+            } catch (error) {
+                log('check-result', `❌ 检查请求失败: ${error.message}`, true);
+            }
+        }
+
+        // 页面加载时自动测试连接
+        window.onload = function () {
+            setTimeout(testBackendConnection, 1000);
+        };
+    </script>
+</body>
+
+</html>

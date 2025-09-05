@@ -1,0 +1,113 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>静态资源测试</title>
+    <meta charset="utf-8">
+</head>
+<body>
+    <h2>静态资源访问测试</h2>
+    
+    <div>
+        <h3>测试头像访问</h3>
+        <p>头像URL: <span id="avatarUrl">http://localhost:8080/uploads/avatars/8d2d1308-6828-480c-8895-38047766371b.jpg</span></p>
+        <img id="avatarImg" src="http://localhost:8080/uploads/avatars/8d2d1308-6828-480c-8895-38047766371b.jpg" 
+             style="max-width: 200px; border: 1px solid #ccc;" 
+             onload="showResult('success', '头像加载成功')" 
+             onerror="showResult('error', '头像加载失败，请检查静态资源配置')">
+        <div id="result"></div>
+        
+        <h4>调试信息</h4>
+        <button onclick="testDirectAccess()">直接访问测试</button>
+        <button onclick="testWithAuth()">带认证访问测试</button>
+        <div id="debugInfo"></div>
+    </div>
+    
+    <script>
+        function showResult(type, message) {
+            const resultDiv = document.getElementById('result');
+            resultDiv.style.color = type === 'success' ? 'green' : 'red';
+            resultDiv.innerHTML = `<strong>${type.toUpperCase()}:</strong> ${message}`;
+        }
+        
+        async function testDirectAccess() {
+            const url = 'http://localhost:8080/uploads/avatars/8d2d1308-6828-480c-8895-38047766371b.jpg';
+            try {
+                const response = await fetch(url, {
+                    method: 'GET',
+                    mode: 'cors'
+                });
+                
+                const debugDiv = document.getElementById('debugInfo');
+                debugDiv.innerHTML = `
+                    <h5>直接访问结果:</h5>
+                    <p>状态码: ${response.status}</p>
+                    <p>状态文本: ${response.statusText}</p>
+                    <p>Content-Type: ${response.headers.get('Content-Type')}</p>
+                    <p>Content-Length: ${response.headers.get('Content-Length')}</p>
+                `;
+                
+                if (response.ok) {
+                    showResult('success', '直接访问头像成功');
+                } else {
+                    showResult('error', `直接访问失败: ${response.status} ${response.statusText}`);
+                }
+            } catch (error) {
+                showResult('error', `直接访问异常: ${error.message}`);
+                const debugDiv = document.getElementById('debugInfo');
+                debugDiv.innerHTML = `<h5>直接访问异常:</h5><p style="color: red;">${error.message}</p>`;
+            }
+        }
+        
+        async function testWithAuth() {
+            // 先登录获取token
+            try {
+                const loginResponse = await fetch('http://localhost:8080/api/auth/login', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify({
+                        username: 'aaa',
+                        password: '123456'
+                    })
+                });
+                
+                const loginData = await loginResponse.json();
+                
+                if (loginData.code === 200) {
+                    const token = loginData.data.token;
+                    
+                    // 使用token访问头像
+                    const url = 'http://localhost:8080/uploads/avatars/8d2d1308-6828-480c-8895-38047766371b.jpg';
+                    const response = await fetch(url, {
+                        method: 'GET',
+                        headers: {
+                            'Authorization': `Bearer ${token}`
+                        }
+                    });
+                    
+                    const debugDiv = document.getElementById('debugInfo');
+                    debugDiv.innerHTML = `
+                        <h5>带认证访问结果:</h5>
+                        <p>登录状态: 成功</p>
+                        <p>Token: ${token.substring(0, 20)}...</p>
+                        <p>访问状态码: ${response.status}</p>
+                        <p>访问状态文本: ${response.statusText}</p>
+                        <p>Content-Type: ${response.headers.get('Content-Type')}</p>
+                    `;
+                    
+                    if (response.ok) {
+                        showResult('success', '带认证访问头像成功');
+                    } else {
+                        showResult('error', `带认证访问失败: ${response.status} ${response.statusText}`);
+                    }
+                } else {
+                    showResult('error', '登录失败，无法测试带认证访问');
+                }
+            } catch (error) {
+                showResult('error', `带认证访问异常: ${error.message}`);
+            }
+        }
+    </script>
+</body>
+</html>

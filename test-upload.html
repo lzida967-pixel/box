@@ -1,0 +1,113 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>头像上传测试</title>
+    <meta charset="utf-8">
+</head>
+<body>
+    <h2>头像上传测试</h2>
+    
+    <div>
+        <h3>1. 登录</h3>
+        <input type="text" id="username" placeholder="用户名" value="aaa">
+        <input type="password" id="password" placeholder="密码" value="123456">
+        <button onclick="login()">登录</button>
+        <div id="loginResult"></div>
+    </div>
+    
+    <div>
+        <h3>2. 上传头像</h3>
+        <input type="file" id="avatar" accept="image/*">
+        <button onclick="uploadAvatar()">上传头像</button>
+        <div id="uploadResult"></div>
+    </div>
+    
+    <script>
+        let token = '';
+        
+        async function login() {
+            const username = document.getElementById('username').value;
+            const password = document.getElementById('password').value;
+            
+            try {
+                const response = await fetch('http://localhost:8080/api/auth/login', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify({
+                        username: username,
+                        password: password
+                    })
+                });
+                
+                const data = await response.json();
+                console.log('登录响应:', data);
+                
+                if (data.code === 200) {
+                    token = data.data.token;
+                    document.getElementById('loginResult').innerHTML = 
+                        `<span style="color: green">登录成功! Token: ${token.substring(0, 20)}...</span>`;
+                } else {
+                    document.getElementById('loginResult').innerHTML = 
+                        `<span style="color: red">登录失败: ${data.message}</span>`;
+                }
+            } catch (error) {
+                console.error('登录错误:', error);
+                document.getElementById('loginResult').innerHTML = 
+                    `<span style="color: red">登录错误: ${error.message}</span>`;
+            }
+        }
+        
+        async function uploadAvatar() {
+            const fileInput = document.getElementById('avatar');
+            const file = fileInput.files[0];
+            
+            if (!file) {
+                alert('请选择文件');
+                return;
+            }
+            
+            if (!token) {
+                alert('请先登录');
+                return;
+            }
+            
+            console.log('准备上传文件:', {
+                name: file.name,
+                size: file.size,
+                type: file.type
+            });
+            
+            const formData = new FormData();
+            formData.append('avatar', file);
+            
+            try {
+                const response = await fetch('http://localhost:8080/api/user/upload-avatar', {
+                    method: 'POST',
+                    headers: {
+                        'Authorization': `Bearer ${token}`
+                    },
+                    body: formData
+                });
+                
+                console.log('上传响应状态:', response.status);
+                const data = await response.json();
+                console.log('上传响应数据:', data);
+                
+                if (data.code === 200) {
+                    document.getElementById('uploadResult').innerHTML = 
+                        `<span style="color: green">上传成功! 头像URL: ${data.data}</span>`;
+                } else {
+                    document.getElementById('uploadResult').innerHTML = 
+                        `<span style="color: red">上传失败: ${data.message}</span>`;
+                }
+            } catch (error) {
+                console.error('上传错误:', error);
+                document.getElementById('uploadResult').innerHTML = 
+                    `<span style="color: red">上传错误: ${error.message}</span>`;
+            }
+        }
+    </script>
+</body>
+</html>
