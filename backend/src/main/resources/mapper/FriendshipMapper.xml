@@ -127,6 +127,7 @@
     </update>
     <update id="update1" parameterType="com.chatapp.entity.Friendship">
         UPDATE friendships
+
         <set>
             <if test="status != null">status = #{status},</if>
             <if test="nickname != null">nickname = #{nickname},</if>
