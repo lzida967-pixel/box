@@ -25,7 +25,6 @@ import java.util.stream.Collectors;
  */
 @RestController
 @RequestMapping("/contacts")
-@CrossOrigin(origins = "*", maxAge = 3600)
 public class ContactController {
 
     private final FriendshipService friendshipService;

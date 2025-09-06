@@ -1,60 +1,64 @@
 <template>
   <div class="friends-page">
-    <div class="friends-header">
-      <h2>我的好友</h2>
-      <el-button 
-        type="primary" 
-        @click="showAddFriend = true"
-        icon="Plus"
-      >
-        添加好友
-      </el-button>
-    </div>
-
-    <el-input
-      v-model="searchText"
-      placeholder="搜索好友"
-      prefix-icon="Search"
-      clearable
-      class="search-input"
-    />
-
-    <!-- 新的朋友选项 -->
-    <div class="new-friends-section" @click="showFriendRequests = true">
-      <div class="new-friends-item">
-        <el-icon class="new-friends-icon"><User /></el-icon>
-        <span class="new-friends-text">新的朋友</span>
-        <el-icon class="new-friends-arrow"><ArrowRight /></el-icon>
-      </div>
-    </div>
-
-    <div class="friends-list">
-      <div
-        v-for="friend in filteredFriends"
-        :key="friend.id"
-        class="friend-item"
-        @click="startChat(friend)"
-      >
-        <el-avatar :src="getUserAvatar(friend)" :size="48" />
-        <div class="friend-info">
-          <div class="friend-name">{{ friend.nickname || friend.username }}</div>
-          <div class="friend-username">@{{ friend.username }}</div>
-          <div v-if="friend.signature" class="friend-signature">{{ friend.signature }}</div>
+    <div class="friends-layout">
+      <!-- 左侧好友列表 -->
+      <div class="friends-sidebar">
+        <div class="friends-header">
+          <h2>我的好友</h2>
+          <el-button 
+            type="primary" 
+            @click="showAddFriend = true"
+            icon="Plus"
+            size="small"
+          >
+            添加好友
+          </el-button>
         </div>
-        <div class="friend-status">
-          <el-tag :type="getStatusType(friend.status || 0)" size="small">
-            {{ getStatusText(friend.status || 0) }}
-          </el-tag>
-        </div>
-        <el-icon class="friend-arrow">
-          <ArrowRight />
-        </el-icon>
-      </div>
 
-      <el-empty 
-        v-if="filteredFriends.length === 0 && !loading" 
-        description="暂无好友" 
-      />
+        <el-input
+          v-model="searchText"
+          placeholder="搜索好友"
+          prefix-icon="Search"
+          clearable
+          class="search-input"
+        />
+
+        <!-- 新的朋友选项 -->
+        <div class="new极速版-friends-section" @click="showFriendRequests = true">
+          <div class="new-friends-item">
+            <el-icon class="new-friends-icon"><User /></el-icon>
+            <span class="new-friends-text">新的朋友</span>
+            <el-icon class="new-friends-arrow"><ArrowRight /></el-icon>
+          </div>
+        </div>
+
+        <div class="friends-list">
+          <div
+            v-for="friend in filteredFriends"
+            :key="friend.id"
+            class="friend-item"
+            :class="{ active: selectedFriend?.id === friend.id }"
+            @click="selectFriend(friend)"
+          >
+            <el-avatar :src="getUserAvatar(friend)" :size="48" />
+            <div class="friend-info">
+              <div class="friend-name">{{ friend.nickname || friend.username }}</div>
+              <div class="friend-username">@{{ friend.username }}</div>
+              <div v-if="friend.signature" class="friend-signature">{{ friend.signature }}</div>
+            </div>
+            <div class="friend-status">
+              <el-tag :type="getStatusType(friend.status || 0)" size="small">
+                {{ getStatusText(friend.status || 0) }}
+              </el-tag>
+            </div>
+          </div>
+
+          <el-empty 
+            v-if="filteredFriends.length === 0 && !loading" 
+            description="暂无好友" 
+          />
+        </div>
+      </div>
     </div>
 
     <!-- 添加好友对话框 -->
@@ -74,7 +78,7 @@
 <script setup lang="ts">
 import { ref, computed, onMounted } from 'vue'
 import ElMessage from 'element-plus/es/components/message/index.mjs'
-import { ArrowRight, User } from '@element-plus/icons-vue'
+import { ArrowRight, User, ChatDotRound, Delete } from '@element-plus/icons-vue'
 import { contactApi } from '@/api'
 import AddFriendDialog from './AddFriendDialog.vue'
 import FriendRequestsDialog from './FriendRequestsDialog.vue'
@@ -91,6 +95,7 @@ const searchText = ref('')
 const loading = ref(false)
 const showAddFriend = ref(false)
 const showFriendRequests = ref(false)
+const selectedFriend = ref<UserType | null>(null)
 
 const filteredFriends = computed(() => {
   if (!searchText.value) return friends.value
@@ -108,12 +113,42 @@ const loadFriends = async () => {
   try {
     const response = await contactApi.getContacts()
     friends.value = response.data || []
+    // 如果之前选中的好友还在列表中，保持选中状态
+    if (selectedFriend.value) {
+      const stillExists = friends.value.find(f => f.id === selectedFriend.value?.id)
+      if (!stillExists) {
+        selectedFriend.value = null
+      }
+    }
   } catch (error: any) {
     ElMessage.error(error.message || '加载好友列表失败')
   } finally {
     loading.value = false
   }
 }
+
+// 选择好友
+const selectFriend = (friend: UserType) => {
+  selectedFriend.value = friend
+  // 发送选中好友事件给父组件
+  emit('friend-selected', friend)
+}
+
+// 监听好友删除事件
+onMounted(() => {
+  // 监听好友删除事件，重新加载好友列表
+  const handleFriendDeleted = () => {
+    loadFriends()
+  }
+  
+  // 添加事件监听器
+  window.addEventListener('friend-deleted', handleFriendDeleted)
+  
+  // 组件卸载时移除事件监听器
+  onUnmounted(() => {
+    window.removeEventListener('friend-deleted', handleFriendDeleted)
+  })
+})
 
 // 处理头像URL
 const getUserAvatar = (user?: UserType) => {
@@ -143,6 +178,22 @@ const startChat = (friend: UserType) => {
   emit('start-chat', friend)
 }
 
+// 删除好友
+const removeFriend = async (friend: UserType) => {
+  try {
+    await contactApi.removeContact(friend.id.toString())
+    ElMessage.success('好友删除成功')
+    // 重新加载好友列表
+    await loadFriends()
+    // 如果删除的是当前选中的好友，清空选中状态
+    if (selectedFriend.value?.id === friend.id) {
+      selectedFriend.value = null
+    }
+  } catch (error: any) {
+    ElMessage.error(error.message || '删除好友失败')
+  }
+}
+
 const getStatusType = (status: number) => {
   switch (status) {
     case 1: return 'success'  // 在线
@@ -170,34 +221,48 @@ onMounted(() => {
 
 <style scoped>
 .friends-page {
-  padding: 20px;
   height: 100%;
+  padding: 0;
+}
+
+.friends-layout {
+  display: flex;
+  height: 100%;
+}
+
+.friends-sidebar {
+  width: 400px;
+  border-right: 1px solid #e0e0e0;
   display: flex;
   flex-direction: column;
+  background: #fafafa;
 }
 
 .friends-header {
   display: flex;
   justify-content: space-between;
   align-items: center;
-  margin-bottom: 20px;
+  padding: 20px;
+  background: white;
+  border-bottom: 1px solid #e0e0e0;
 }
 
 .friends-header h2 {
   margin: 0;
   color: #333;
+  font-size: 18px;
 }
 
 .search-input {
-  margin-bottom: 20px;
+  margin: 20px;
 }
 
 /* 新的朋友选项样式 */
 .new-friends-section {
-  margin-bottom: 20px;
+  margin: 0 20px 20px 20px;
   border-radius: 8px;
   overflow: hidden;
-  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.1);
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 极速版0.1);
 }
 
 .new-friends-item {
@@ -233,6 +298,7 @@ onMounted(() => {
 .friends-list {
   flex: 1;
   overflow-y: auto;
+  padding: 0 20px 20px 20px;
 }
 
 .friend-item {
@@ -241,13 +307,21 @@ onMounted(() => {
   padding: 16px;
   border-radius: 8px;
   cursor: pointer;
-  transition: background-color 0.2s;
+  transition: all 0.2s;
   gap: 16px;
-  border-bottom: 1px solid #f0f0f0;
+  border: 1px solid transparent;
+  background: white;
+  margin-bottom: 8px;
 }
 
 .friend-item:hover {
-  background-color: #f8f9fa;
+  background-color: #f5f7fa;
+  border-color: #e4e7ed;
+}
+
+.friend-item.active {
+  background-color: #ecf5ff;
+  border-color: #409eff;
 }
 
 .friend-info {
@@ -257,7 +331,7 @@ onMounted(() => {
 
 .friend-name {
   font-weight: 500;
-  font-size: 16px;
+  font-size: 极速版16px;
   color: #333;
   margin-bottom: 4px;
 }
@@ -280,10 +354,9 @@ onMounted(() => {
   flex-shrink: 0;
 }
 
-.friend-arrow {
-  color: #ccc;
-  font-size: 16px;
-}
+
+
+
 
 /* 滚动条样式 */
 .friends-list::-webkit-scrollbar {

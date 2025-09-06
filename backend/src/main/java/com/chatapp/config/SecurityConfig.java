@@ -6,6 +6,7 @@ import org.springframework.context.annotation.Configuration;
 import org.springframework.security.config.annotation.web.builders.HttpSecurity;
 import org.springframework.security.config.annotation.web.configuration.EnableWebSecurity;
 import org.springframework.security.config.http.SessionCreationPolicy;
+import org.springframework.http.HttpMethod;
 import org.springframework.security.crypto.bcrypt.BCryptPasswordEncoder;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.security.web.SecurityFilterChain;
@@ -53,7 +54,7 @@ public class SecurityConfig {
                 .sessionManagement(session -> session
                         .sessionCreationPolicy(SessionCreationPolicy.STATELESS))
                 .authorizeHttpRequests(auth -> auth
-                        .requestMatchers("OPTIONS", "/**").permitAll() // 明确允许所有OPTIONS请求
+                        .requestMatchers(HttpMethod.OPTIONS, "/**").permitAll() // 明确允许所有OPTIONS请求
                         .requestMatchers("/auth/**", "/contacts/**", "/api/user/list-all", "/api/user/avatar/**",
                                 "/user/avatar/**", "/api/files/**")
                         .permitAll()
@@ -95,17 +96,14 @@ public class SecurityConfig {
     @Bean
     public CorsConfigurationSource corsConfigurationSource() {
         CorsConfiguration configuration = new CorsConfiguration();
-        // 允许的源（开发环境）
+        // 允许所有源
         configuration.setAllowedOriginPatterns(Arrays.asList("*"));
-        configuration.setAllowedOrigins(
-                Arrays.asList("http://localhost:3000", "http://localhost:5173", "http://127.0.0.1:3000"));
         // 允许的HTTP方法
         configuration.setAllowedMethods(Arrays.asList("GET", "POST", "PUT", "DELETE", "OPTIONS", "HEAD", "PATCH"));
-        // 允许的请求头
+        // 允许所有请求头
         configuration.setAllowedHeaders(Arrays.asList("*"));
         // 暴露的响应头
-        configuration.setExposedHeaders(
-                Arrays.asList("Authorization", "Content-Disposition", "Access-Control-Allow-Origin"));
+        configuration.setExposedHeaders(Arrays.asList("*"));
         // 允许携带凭证
         configuration.setAllowCredentials(true);
         // 预检请求缓存时间（1小时）
@@ -114,9 +112,10 @@ public class SecurityConfig {
         UrlBasedCorsConfigurationSource source = new UrlBasedCorsConfigurationSource();
         source.registerCorsConfiguration("/**", configuration);
 
-        System.out.println("CORS配置已加载：允许所有源和方法");
+        System.out.println("CORS配置已加载：允许所有源、方法和请求头");
         System.out.println("允许的源: " + configuration.getAllowedOriginPatterns());
         System.out.println("允许的方法: " + configuration.getAllowedMethods());
+        System.out.println("允许的请求头: " + configuration.getAllowedHeaders());
         return source;
     }
 }

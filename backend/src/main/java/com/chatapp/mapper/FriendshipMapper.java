@@ -23,9 +23,14 @@ public interface FriendshipMapper {
     Optional<Friendship> findById(Long id);
 
     /**
-     * 查找两个用户间的好友关系
+     * 查找两个用户间的好友关系（用户→好友方向）
      */
     Optional<Friendship> findByUserAndFriend(@Param("userId") Long userId, @Param("friendId") Long friendId);
+
+    /**
+     * 查找两个用户间的好友关系（好友→用户方向）
+     */
+    Optional<Friendship> findByFriendAndUser(@Param("userId") Long userId, @Param("friendId") Long friendId);
 
     /**
      * 获取用户的所有好友关系（已确认的）
@@ -61,6 +66,7 @@ public interface FriendshipMapper {
      * 更新好友关系
      */
     int update(Friendship friendship);
+    int update1(Friendship friendship);
 
     /**
      * 删除好友关系（软删除）
@@ -71,4 +77,11 @@ public interface FriendshipMapper {
      * 检查是否存在好友关系（任一方向）
      */
     boolean existsFriendship(@Param("userId") Long userId, @Param("friendId") Long friendId);
+
+    /**
+     * 查找已删除的好友关系记录
+     */
+    Optional<Friendship> findDeletedFriendship(@Param("userId") Long userId, @Param("friendId") Long friendId);
+
+
 }

@@ -16,6 +16,7 @@ public class User {
     private String password;
     private String email;
     private String nickname;
+    private String remark;
     private String avatar;
     private byte[] avatarData;           // 头像二进制数据
     private String avatarContentType;   // 头像MIME类型
@@ -83,6 +84,14 @@ public class User {
 
     public void setNickname(String nickname) {
         this.nickname = nickname;
+    }
+
+    public String getRemark() {
+        return remark;
+    }
+
+    public void setRemark(String remark) {
+        this.remark = remark;
     }
 
     public String getAvatar() {

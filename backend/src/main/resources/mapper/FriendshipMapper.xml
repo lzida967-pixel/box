@@ -21,6 +21,7 @@
         <result property="password" column="password" />
         <result property="email" column="email" />
         <result property="nickname" column="nickname" />
+        <result property="remark" column="remark" />
         <result property="avatar" column="avatar" />
         <result property="avatarData" column="avatar_data" />
         <result property="avatarContentType" column="avatar_content_type" />
@@ -41,8 +42,14 @@
 
     <select id="findByUserAndFriend" resultMap="FriendshipResultMap">
         SELECT * FROM friendships 
-        WHERE ((user_id = #{userId} AND friend_id = #{friendId}) 
-               OR (user_id = #{friendId} AND friend_id = #{userId}))
+        WHERE user_id = #{userId} AND friend_id = #{friendId}
+        AND deleted = 0
+        LIMIT 1
+    </select>
+
+    <select id="findByFriendAndUser" resultMap="FriendshipResultMap">
+        SELECT * FROM friendships 
+        WHERE user_id = #{friendId} AND friend_id = #{userId}
         AND deleted = 0
         LIMIT 1
     </select>
@@ -55,12 +62,21 @@
     </select>
 
     <select id="findFriendsByUserId" resultMap="UserResultMap">
-        SELECT DISTINCT u.* FROM users u
-        INNER JOIN friendships f ON (
-            (f.user_id = #{userId} AND f.friend_id = u.id) 
-            OR (f.friend_id = #{userId} AND f.user_id = u.id)
+        SELECT u.*, 
+               COALESCE(
+                 (SELECT f1.nickname FROM friendships f1 
+                  WHERE f1.user_id = #{userId} AND f1.friend_id = u.id AND f1.status = 1 AND f1.deleted = 0),
+                 u.nickname
+               ) as remark
+        FROM users u
+        WHERE u.id IN (
+            SELECT f.user_id FROM friendships f 
+            WHERE f.friend_id = #{userId} AND f.status = 1 AND f.deleted = 0
+            UNION
+            SELECT f.friend_id FROM friendships f 
+            WHERE f.user_id = #{userId} AND f.status = 1 AND f.deleted = 0
         )
-        WHERE f.status = 1 AND f.deleted = 0 AND u.deleted = 0
+        AND u.deleted = 0
         ORDER BY u.username
     </select>
 
@@ -109,6 +125,19 @@
         </set>
         WHERE id = #{id} AND deleted = 0
     </update>
+    <update id="update1" parameterType="com.chatapp.entity.Friendship">
+        UPDATE friendships
+        <set>
+            <if test="status != null">status = #{status},</if>
+            <if test="nickname != null">nickname = #{nickname},</if>
+            <if test="groupName != null">group_name = #{groupName},</if>
+            <if test="requestMessage != null">request_message = #{requestMessage},</if>
+            <if test="deleted != null">deleted = #{deleted},</if>
+            update_time = NOW()
+        </set>
+        WHERE id = #{id}
+    </update>
+
 
     <update id="deleteById">
         UPDATE friendships SET deleted = 1, update_time = NOW() WHERE id = #{id}
@@ -119,6 +148,13 @@
         WHERE ((user_id = #{userId} AND friend_id = #{friendId}) 
                OR (user_id = #{friendId} AND friend_id = #{userId}))
         AND deleted = 0
+    </select>
+
+    <select id="findDeletedFriendship" resultMap="FriendshipResultMap">
+        SELECT * FROM friendships 
+        WHERE user_id = #{userId} AND friend_id = #{friendId}
+        AND deleted = 1
+        LIMIT 1
     </select>
 
 </mapper>

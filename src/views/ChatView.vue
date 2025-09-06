@@ -125,7 +125,10 @@
 
       <!-- 联系人列表 -->
       <div v-else-if="activeTab === 'contacts'" class="contacts-list">
-        <FriendsPage @start-chat="startChatWithContact" />
+        <FriendsPage 
+          @start-chat="startChatWithContact" 
+          @friend-selected="handleFriendSelected" 
+        />
       </div>
 
       <!-- 群组列表 -->
@@ -141,40 +144,111 @@
       </div>
     </div>
 
-    <!-- 右侧聊天区域 -->
+    <!-- 右侧区域 -->
     <div class="chat-area">
-      <template v-if="chatStore.activeConversationId">
-        <!-- 聊天头部 -->
-        <div class="chat-header">
-          <div class="contact-info">
-            <el-avatar :src="currentContact?.avatar" :size="36" />
-            <div class="contact-details">
-              <div class="contact-name">{{ currentContact?.name }}</div>
-              <div class="contact-status">{{ currentContact?.status === 'online' ? '在线' : '离线' }}</div>
+      <!-- 联系人页面显示好友详情 -->
+      <template v-if="activeTab === 'contacts'">
+        <div class="contact-detail-panel">
+          <div class="detail-header">
+            <h3>好友详情</h3>
+          </div>
+          <div class="detail-content" v-if="selectedFriend">
+            <div class="avatar-section">
+              <el-avatar :src="getUserAvatar(selectedFriend)" :size="80" />
+            </div>
+            
+            <div class="info-section">
+              <div class="info-item">
+                <label>用户名:</label>
+                <span>{{ selectedFriend.username }}</span>
+              </div>
+              
+              <div class="info-item">
+                <label>昵称:</label>
+                <span>{{ selectedFriend.nickname || '' }}</span>
+              </div>
+              
+              <div class="info-item">
+                <label>备注:</label>
+                <div class="remark-container">
+                  <span>{{ selectedFriend.remark || '' }}</span>
+                  <el-icon class="edit-icon" @click="showEditRemarkDialog(selectedFriend)">
+                    <Edit />
+                  </el-icon>
+                </div>
+              </div>
+              
+              <div class="info-item">
+                <label>性别:</label>
+                <span>{{ selectedFriend.gender ? getGenderText(selectedFriend.gender) : '' }}</span>
+              </div>
+              
+
+              
+              <div class="info-item">
+                <label>签名:</label>
+                <span class="signature">{{ selectedFriend.signature || '' }}</span>
+              </div>
+            </div>
+            
+            <div class="action-buttons">
+              <el-button 
+                type="primary" 
+                @click="startChatWithContact(selectedFriend)"
+                icon="ChatDotRound"
+              >
+                开始聊天
+              </el-button>
+              <el-button 
+                type="danger" 
+                @click="showDeleteConfirm(selectedFriend)"
+                icon="Delete"
+              >
+                删除好友
+              </el-button>
             </div>
           </div>
-          
-          <div class="chat-actions">
-            <el-button text @click="showContactInfo = true">
-              <el-icon><More /></el-icon>
-            </el-button>
+          <div class="detail-content" v-else>
+            <el-empty description="请选择好友查看详情" />
           </div>
         </div>
-
-        <!-- 消息列表 -->
-        <MessageList :messages="chatStore.activeMessages" />
-
-        <!-- 消息输入框 -->
-        <MessageInput @send="handleSendMessage" />
       </template>
       
-      <!-- 空状态 -->
-      <div v-else class="empty-state">
-        <div class="empty-content">
-          <el-icon size="64" color="#ddd"><ChatDotRound /></el-icon>
-          <div class="empty-text">选择一个对话开始聊天</div>
+      <!-- 其他页面显示聊天区域 -->
+      <template v-else>
+        <template v-if="chatStore.activeConversationId">
+          <!-- 聊天头部 -->
+          <div class="chat-header">
+            <div class="contact-info">
+              <el-avatar :src="currentContact?.avatar" :size="36" />
+              <div class="contact-details">
+                <div class="contact-name">{{ currentContact?.name }}</div>
+                <div class="contact-status">{{ currentContact?.status === 'online' ? '在线' : '离线' }}</div>
+              </div>
+            </div>
+            
+            <div class="chat-actions">
+              <el-button text @click="showContactInfo = true">
+                <el-icon><More /></el-icon>
+              </el-button>
+            </div>
+          </div>
+
+          <!-- 消息列表 -->
+          <MessageList :messages="chatStore.activeMessages" />
+
+          <!-- 消息输入框 -->
+          <MessageInput @send="handleSendMessage" />
+        </template>
+        
+        <!-- 空状态 -->
+        <div v-else class="empty-state">
+          <div class="empty-content">
+            <el-icon size="64" color="#ddd"><ChatDotRound /></el-icon>
+            <div class="empty-text">选择一个对话开始聊天</div>
+          </div>
         </div>
-      </div>
+      </template>
     </div>
 
     <!-- 联系人信息弹窗 -->
@@ -191,6 +265,31 @@
       v-model="showContactSelector"
       @select="handleSelectContact"
     />
+
+    <!-- 修改备注对话框 -->
+    <el-dialog
+      v-model="showEditRemarkDialogVisible"
+      title="修改备注"
+      width="400px"
+      :before-close="handleDialogClose"
+    >
+      <el-form :model="remarkForm" label-width="80px">
+        <el-form-item label="备注名称">
+          <el-input 
+            v-model="remarkForm.nickname" 
+            placeholder="请输入备注名称"
+            maxlength="20"
+            show-word-limit
+          />
+        </el-form-item>
+      </el-form>
+      <template #footer>
+        <span class="dialog-footer">
+          <el-button @click="showEditRemarkDialogVisible = false">取消</el-button>
+          <el-button type="primary" @click="handleUpdateRemark">确定</el-button>
+        </span>
+      </template>
+    </el-dialog>
   </div>
 </template>
 
@@ -199,8 +298,10 @@ import { ref, computed, onMounted } from 'vue'
 import { useRouter } from 'vue-router'
 import ElMessage from 'element-plus/es/components/message/index.mjs'
 import ElMessageBox from 'element-plus/es/components/message-box/index.mjs'
+import { Edit } from '@element-plus/icons-vue'
 import { useAuthStore } from '@/stores/auth'
 import { useChatStore } from '@/stores/chat'
+import { contactApi } from '@/api'
 import MessageList from '@/components/MessageList.vue'
 import MessageInput from '@/components/MessageInput.vue'
 import ContactSelector from '@/components/ContactSelector.vue'
@@ -219,6 +320,12 @@ const showContactSelector = ref(false)
 const showContactInfo = ref(false)
 const showSettings = ref(false)
 const activeTab = ref('messages')
+const selectedFriend = ref<User | null>(null)
+const showEditRemarkDialogVisible = ref(false)
+const remarkForm = ref({
+  friendId: 0,
+  nickname: ''
+})
 
 const currentContact = computed(() => {
   if (!chatStore.activeConversation) return null
@@ -345,6 +452,126 @@ const handleLogout = async () => {
 // 添加好友页面需要的聊天启动方法
 const startChatWithContact = (contact: User) => {
   handleSelectContact(contact)
+}
+
+// 处理好友选中事件
+const handleFriendSelected = (friend: User) => {
+  selectedFriend.value = friend
+  // 调试：输出好友数据查看包含的字段
+  console.log('选中的好友数据:', friend)
+}
+
+// 显示删除好友确认对话框
+const showDeleteConfirm = (friend: User) => {
+  ElMessageBox.confirm(
+    `确定要删除好友 "${friend.nickname || friend.username}" 吗？`,
+    '删除好友',
+    {
+      confirmButtonText: '确定',
+      cancelButtonText: '取消',
+      type: 'warning',
+    }
+  ).then(async () => {
+    try {
+      // 调用API删除好友
+      await contactApi.removeContact(friend.id.toString())
+      ElMessage.success('好友删除成功')
+      selectedFriend.value = null
+      
+      // 重新加载好友列表
+      if (activeTab.value === 'contacts') {
+        // 发射自定义事件通知FriendsPage组件刷新好友列表
+        const event = new CustomEvent('friend-deleted')
+        window.dispatchEvent(event)
+      }
+    } catch (error: any) {
+      ElMessage.error(error.message || '删除好友失败')
+    }
+  }).catch(() => {
+    // 用户取消
+  })
+}
+
+// 获取状态类型
+const getStatusType = (status: number) => {
+  switch (status) {
+    case 1: return 'success'  // 在线
+    case 2: return 'warning'  // 忙碌
+    case 3: return 'info'     // 离开
+    case 0: 
+    default: return 'danger'  // 离线
+  }
+}
+
+// 获取状态文本
+const getStatusText = (status: number) => {
+  switch (status) {
+    case 1: return '在线'
+    case 2: return '忙碌'
+    case 3: return '离开'
+    case 0: 
+    default: return '离线'
+  }
+}
+
+// 获取性别文本
+const getGenderText = (gender: number) => {
+  switch (gender) {
+    case 1: return '男'
+    case 2: return '女'
+    case 0:
+    default: return '未知'
+  }
+}
+
+// 显示修改备注对话框
+const showEditRemarkDialog = (friend: User) => {
+  remarkForm.value = {
+    friendId: friend.id,
+    nickname: friend.remark || friend.nickname || ''
+  }
+  showEditRemarkDialogVisible.value = true
+}
+
+// 处理对话框关闭
+const handleDialogClose = (done: () => void) => {
+  remarkForm.value = {
+    friendId: 0,
+    nickname: ''
+  }
+  done()
+}
+
+// 更新备注
+const handleUpdateRemark = async () => {
+  if (!remarkForm.value.nickname.trim()) {
+    ElMessage.warning('请输入备注名称')
+    return
+  }
+
+  try {
+    // 使用配置好的axios实例调用API更新备注
+    await contactApi.updateFriendNickname(
+      remarkForm.value.friendId.toString(),
+      remarkForm.value.nickname.trim()
+    )
+
+    ElMessage.success('备注修改成功')
+    showEditRemarkDialogVisible.value = false
+    
+    // 更新本地数据
+    if (selectedFriend.value && selectedFriend.value.id === remarkForm.value.friendId) {
+      selectedFriend.value.remark = remarkForm.value.nickname.trim()
+    }
+    
+    // 重新加载好友列表
+    if (activeTab.value === 'contacts') {
+      // 这里需要触发好友列表重新加载
+      // 可以通过事件总线或其他方式通知FriendsPage组件刷新
+    }
+  } catch (error: any) {
+    ElMessage.error(error.message || '修改备注失败')
+  }
 }
 
 // 初始化用户数据
@@ -727,6 +954,96 @@ onMounted(async () => {
   margin-top: 16px;
   color: #999;
   font-size: 16px;
+}
+
+/* 好友详情面板样式 */
+.contact-detail-panel {
+  padding: 40px 20px 20px 20px;
+  background: white;
+  height: 100%;
+  display: flex;
+  flex-direction: column;
+}
+
+.detail-header {
+  text-align: center;
+  margin-bottom: 30px;
+}
+
+.detail-header h3 {
+  margin: 0;
+  color: #333;
+  font-size: 20px;
+  font-weight: 600;
+}
+
+.detail-content {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: flex-start;
+}
+
+.avatar-section {
+  margin-bottom: 24px;
+}
+
+.info-section {
+  width: 100%;
+  max-width: 300px;
+  margin-bottom: 32px;
+}
+
+.info-item {
+  display: flex;
+  align-items: center;
+  margin-bottom: 16px;
+  gap: 12px;
+}
+
+.info-item label {
+  width: 80px;
+  color: #666;
+  font-weight: 500;
+  flex-shrink: 0;
+  text-align: right;
+}
+
+.info-item span {
+  flex: 1;
+  color: #333;
+}
+
+.remark-container {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex: 1;
+}
+
+.edit-icon {
+  color: #1890ff;
+  cursor: pointer;
+  font-size: 16px;
+  opacity: 0.6;
+  transition: opacity 0.2s;
+}
+
+.edit-icon:hover {
+  opacity: 1;
+}
+
+.signature {
+  color: #999;
+  font-style: italic;
+}
+
+.action-buttons {
+  display: flex;
+  gap: 12px;
+  justify-content: center;
+  margin-top: 20px;
 }
 
 /* 滚动条样式 */
