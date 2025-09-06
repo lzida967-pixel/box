@@ -1,4 +1,5 @@
 import { api } from './config'
+import type { AxiosResponse } from 'axios'
 
 // ==================== 类型定义 ====================
 
@@ -133,7 +134,7 @@ export const userApi = {
   uploadAvatar: (file: File): Promise<ApiResponse<string>> => {
     const formData = new FormData()
     formData.append('avatar', file)
-    
+
     // 不手动设置Content-Type，让浏览器自动处理multipart/form-data和boundary
     return api.post('/user/upload-avatar', formData)
   },
@@ -229,10 +230,38 @@ export const contactApi = {
   },
 
   /**
+   * 获取收到的好友请求
+   */
+  getReceivedRequests: (): Promise<ApiResponse<any[]>> => {
+    return api.get('/contacts/requests/received')
+  },
+
+  /**
+   * 获取发送的好友请求
+   */
+  getSentRequests: (): Promise<ApiResponse<any[]>> => {
+    return api.get('/contacts/requests/sent')
+  },
+
+  /**
    * 删除联系人
    */
   removeContact: (userId: string): Promise<ApiResponse<void>> => {
     return api.delete(`/contacts/${userId}`)
+  },
+
+  /**
+   * 更新好友备注
+   */
+  updateFriendNickname: (friendId: string, nickname: string): Promise<ApiResponse<void>> => {
+    return api.put(`/contacts/${friendId}/nickname`, { nickname })
+  },
+
+  /**
+   * 删除用户头像
+   */
+  deleteAvatar: (userId: string): Promise<ApiResponse<void>> => {
+    return api.delete(`/user/avatar/${userId}`)
   }
 }
 

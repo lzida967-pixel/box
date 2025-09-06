@@ -7,6 +7,7 @@ export {}
 
 declare module 'vue' {
   export interface GlobalComponents {
+    AddFriendDialog: typeof import('./src/components/AddFriendDialog.vue')['default']
     ContactInfo: typeof import('./src/components/ContactInfo.vue')['default']
     ContactList: typeof import('./src/components/ContactList.vue')['default']
     ContactSelector: typeof import('./src/components/ContactSelector.vue')['default']
@@ -28,8 +29,12 @@ declare module 'vue' {
     ElRadio: typeof import('element-plus/es')['ElRadio']
     ElRadioGroup: typeof import('element-plus/es')['ElRadioGroup']
     ElSwitch: typeof import('element-plus/es')['ElSwitch']
+    ElTabPane: typeof import('element-plus/es')['ElTabPane']
+    ElTabs: typeof import('element-plus/es')['ElTabs']
     ElTag: typeof import('element-plus/es')['ElTag']
     ElText: typeof import('element-plus/es')['ElText']
+    FriendRequestsDialog: typeof import('./src/components/FriendRequestsDialog.vue')['default']
+    FriendsPage: typeof import('./src/components/FriendsPage.vue')['default']
     MessageInput: typeof import('./src/components/MessageInput.vue')['default']
     MessageList: typeof import('./src/components/MessageList.vue')['default']
     RouterLink: typeof import('vue-router')['RouterLink']

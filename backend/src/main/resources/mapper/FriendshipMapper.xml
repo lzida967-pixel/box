@@ -1,0 +1,124 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.chatapp.mapper.FriendshipMapper">
+
+    <resultMap id="FriendshipResultMap" type="com.chatapp.entity.Friendship">
+        <id property="id" column="id" />
+        <result property="userId" column="user_id" />
+        <result property="friendId" column="friend_id" />
+        <result property="status" column="status" />
+        <result property="nickname" column="nickname" />
+        <result property="groupName" column="group_name" />
+        <result property="requestMessage" column="request_message" />
+        <result property="createTime" column="create_time" />
+        <result property="updateTime" column="update_time" />
+        <result property="deleted" column="deleted" />
+    </resultMap>
+
+    <resultMap id="UserResultMap" type="com.chatapp.entity.User">
+        <id property="id" column="id" />
+        <result property="username" column="username" />
+        <result property="password" column="password" />
+        <result property="email" column="email" />
+        <result property="nickname" column="nickname" />
+        <result property="avatar" column="avatar" />
+        <result property="avatarData" column="avatar_data" />
+        <result property="avatarContentType" column="avatar_content_type" />
+        <result property="status" column="status" />
+        <result property="signature" column="signature" />
+        <result property="phone" column="phone" />
+        <result property="gender" column="gender" />
+        <result property="birthday" column="birthday" />
+        <result property="lastLoginTime" column="last_login_time" />
+        <result property="createTime" column="create_time" />
+        <result property="updateTime" column="update_time" />
+        <result property="deleted" column="deleted" />
+    </resultMap>
+
+    <select id="findById" resultMap="FriendshipResultMap">
+        SELECT * FROM friendships WHERE id = #{id} AND deleted = 0
+    </select>
+
+    <select id="findByUserAndFriend" resultMap="FriendshipResultMap">
+        SELECT * FROM friendships 
+        WHERE ((user_id = #{userId} AND friend_id = #{friendId}) 
+               OR (user_id = #{friendId} AND friend_id = #{userId}))
+        AND deleted = 0
+        LIMIT 1
+    </select>
+
+    <select id="findConfirmedFriendshipsByUserId" resultMap="FriendshipResultMap">
+        SELECT * FROM friendships 
+        WHERE (user_id = #{userId} OR friend_id = #{userId}) 
+        AND status = 1 AND deleted = 0
+        ORDER BY update_time DESC
+    </select>
+
+    <select id="findFriendsByUserId" resultMap="UserResultMap">
+        SELECT DISTINCT u.* FROM users u
+        INNER JOIN friendships f ON (
+            (f.user_id = #{userId} AND f.friend_id = u.id) 
+            OR (f.friend_id = #{userId} AND f.user_id = u.id)
+        )
+        WHERE f.status = 1 AND f.deleted = 0 AND u.deleted = 0
+        ORDER BY u.username
+    </select>
+
+    <select id="findPendingRequestsByUserId" resultMap="FriendshipResultMap">
+        SELECT * FROM friendships 
+        WHERE friend_id = #{userId} AND status = 0 AND deleted = 0
+        ORDER BY create_time DESC
+    </select>
+
+    <select id="findSentRequestsByUserId" resultMap="FriendshipResultMap">
+        SELECT * FROM friendships 
+        WHERE user_id = #{userId} AND status = 0 AND deleted = 0
+        ORDER BY create_time DESC
+    </select>
+
+    <select id="searchAvailableUsers" resultMap="UserResultMap">
+        SELECT * FROM users u
+        WHERE u.deleted = 0 
+        AND u.id != #{currentUserId}
+        AND (u.username LIKE CONCAT('%', #{keyword}, '%') 
+             OR u.nickname LIKE CONCAT('%', #{keyword}, '%')
+             OR u.email LIKE CONCAT('%', #{keyword}, '%'))
+        AND NOT EXISTS (
+            SELECT 1 FROM friendships f 
+            WHERE ((f.user_id = #{currentUserId} AND f.friend_id = u.id) 
+                   OR (f.user_id = u.id AND f.friend_id = #{currentUserId}))
+            AND f.deleted = 0
+        )
+        ORDER BY u.username
+        LIMIT 20
+    </select>
+
+    <insert id="insert" parameterType="com.chatapp.entity.Friendship" useGeneratedKeys="true" keyProperty="id">
+        INSERT INTO friendships (user_id, friend_id, status, nickname, group_name, request_message, create_time, update_time)
+        VALUES (#{userId}, #{friendId}, #{status}, #{nickname}, #{groupName}, #{requestMessage}, #{createTime}, #{updateTime})
+    </insert>
+
+    <update id="update" parameterType="com.chatapp.entity.Friendship">
+        UPDATE friendships 
+        <set>
+            <if test="status != null">status = #{status},</if>
+            <if test="nickname != null">nickname = #{nickname},</if>
+            <if test="groupName != null">group_name = #{groupName},</if>
+            <if test="requestMessage != null">request_message = #{requestMessage},</if>
+            update_time = NOW()
+        </set>
+        WHERE id = #{id} AND deleted = 0
+    </update>
+
+    <update id="deleteById">
+        UPDATE friendships SET deleted = 1, update_time = NOW() WHERE id = #{id}
+    </update>
+
+    <select id="existsFriendship" resultType="boolean">
+        SELECT COUNT(*) > 0 FROM friendships 
+        WHERE ((user_id = #{userId} AND friend_id = #{friendId}) 
+               OR (user_id = #{friendId} AND friend_id = #{userId}))
+        AND deleted = 0
+    </select>
+
+</mapper>

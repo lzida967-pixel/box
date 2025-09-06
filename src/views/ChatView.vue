@@ -42,16 +42,6 @@
           clearable
           class="search-input"
         />
-        <el-button 
-          v-if="activeTab === 'contacts'"
-          @click="showContactSelector = true" 
-          type="primary" 
-          circle
-          size="small"
-          title="添加联系人"
-        >
-          <el-icon><Plus /></el-icon>
-        </el-button>
       </div>
 
       <!-- 消息列表 -->
@@ -94,7 +84,8 @@
         </div>
       </div>
 
-      <!-- 联系人列表 -->
+      <!-- 原来的联系人列表已被好友页面替代 -->
+      <!--
       <div v-else-if="activeTab === 'contacts'" class="contacts-list">
         <div class="section-title">在线</div>
         <div
@@ -129,6 +120,12 @@
             <el-icon class="chat-icon"><ChatDotRound /></el-icon>
           </div>
         </div>
+      </div>
+      -->
+
+      <!-- 联系人列表 -->
+      <div v-else-if="activeTab === 'contacts'" class="contacts-list">
+        <FriendsPage @start-chat="startChatWithContact" />
       </div>
 
       <!-- 群组列表 -->
@@ -200,7 +197,8 @@
 <script setup lang="ts">
 import { ref, computed, onMounted } from 'vue'
 import { useRouter } from 'vue-router'
-import { ElMessage, ElMessageBox } from 'element-plus'
+import ElMessage from 'element-plus/es/components/message/index.mjs'
+import ElMessageBox from 'element-plus/es/components/message-box/index.mjs'
 import { useAuthStore } from '@/stores/auth'
 import { useChatStore } from '@/stores/chat'
 import MessageList from '@/components/MessageList.vue'
@@ -208,6 +206,7 @@ import MessageInput from '@/components/MessageInput.vue'
 import ContactSelector from '@/components/ContactSelector.vue'
 import ContactInfo from '@/components/ContactInfo.vue'
 import SettingsDialog from '@/components/SettingsDialog.vue'
+import FriendsPage from '@/components/FriendsPage.vue'
 import type { User, Conversation, Message } from '@/types'
 import dayjs from 'dayjs'
 
@@ -227,25 +226,18 @@ const currentContact = computed(() => {
 })
 
 const totalUnreadCount = computed(() => {
-  return chatStore.sortedConversations.reduce((total, conv) => total + conv.unreadCount, 0)
-})
-
-const onlineContacts = computed(() => {
-  return chatStore.availableContacts.filter(contact => contact.status === 'online')
-})
-
-const offlineContacts = computed(() => {
-  return chatStore.availableContacts.filter(contact => contact.status !== 'online')
+  return chatStore.sortedConversations.reduce((total: number, conv: Conversation) => total + conv.unreadCount, 0)
 })
 
 const getContactName = (conversation: Conversation) => {
   const contact = chatStore.getConversationContact(conversation)
-  return contact?.name || '未知联系人'
+  return contact?.name || contact?.nickname || contact?.username || '未知联系人'
 }
 
 const getContactAvatar = (conversation: Conversation) => {
   const contact = chatStore.getConversationContact(conversation)
-  return contact?.avatar || 'https://avatars.githubusercontent.com/u/0?v=4'
+  // 使用getUserAvatar函数处理头像URL
+  return getUserAvatar(contact)
 }
 
 const getContactStatus = (conversation: Conversation) => {
@@ -281,6 +273,24 @@ const formatTime = (timestamp: Date) => {
   }
 }
 
+// 处理头像URL
+const getUserAvatar = (user?: User) => {
+  if (!user) return 'https://avatars.githubusercontent.com/u/0?v=4'
+  
+  // 如果用户有自定义头像
+  if (user.avatar) {
+    // 如果是本地上传的头像（以avatar_开头）
+    if (user.avatar.startsWith('avatar_')) {
+      return `http://localhost:8080/api/user/avatar/${user.id}`
+    }
+    // 其他情况直接使用avatar字段
+    return user.avatar
+  }
+  
+  // 默认头像
+  return 'https://avatars.githubusercontent.com/u/0?v=4'
+}
+
 const handleSelectConversation = (conversationId: string) => {
   chatStore.setActiveConversation(conversationId)
 }
@@ -311,10 +321,6 @@ const handleSelectContact = (contact: User) => {
   }
 }
 
-const startChatWithContact = (contact: User) => {
-  handleSelectContact(contact)
-}
-
 const handleLogout = async () => {
   try {
     await ElMessageBox.confirm(
@@ -336,11 +342,16 @@ const handleLogout = async () => {
   }
 }
 
+// 添加好友页面需要的聊天启动方法
+const startChatWithContact = (contact: User) => {
+  handleSelectContact(contact)
+}
+
 // 初始化用户数据
-onMounted(() => {
+onMounted(async () => {
   const currentUser = authStore.userInfo
   if (currentUser && currentUser.id) {
-    chatStore.initializeUserData(currentUser.id)
+    await chatStore.initializeUserData(currentUser.id)
   }
 })
 </script>

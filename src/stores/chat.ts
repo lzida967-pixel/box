@@ -1,6 +1,7 @@
 import { defineStore } from 'pinia'
 import type { User, Message, Conversation } from '@/types'
 import { useAuthStore } from './auth'
+import { contactApi } from '@/api'
 
 interface ChatState {
   contacts: User[]
@@ -8,114 +9,113 @@ interface ChatState {
   messages: Record<string, Message[]>
   activeConversationId: string | null
   isTyping: Record<string, boolean>
+  loading: boolean
 }
 
 export const useChatStore = defineStore('chat', {
   state: (): ChatState => ({
-    contacts: [
-      {
-        id: '1',
-        name: '张三',
-        avatar: 'https://avatars.githubusercontent.com/u/1?v=4',
-        status: 'online'
-      },
-      {
-        id: '2',
-        name: '李四',
-        avatar: 'https://avatars.githubusercontent.com/u/2?v=4',
-        status: 'away'
-      },
-      {
-        id: '3',
-        name: '王五',
-        avatar: 'https://avatars.githubusercontent.com/u/3?v=4',
-        status: 'offline'
-      },
-      {
-        id: '4',
-        name: '管理员',
-        avatar: 'https://avatars.githubusercontent.com/u/4?v=4',
-        status: 'online'
-      }
-    ],
+    contacts: [],
     conversations: [],
     messages: {},
     activeConversationId: null,
-    isTyping: {}
+    isTyping: {},
+    loading: false
   }),
 
   getters: {
     // 获取当前用户
-    currentUser(): User | null {
+    currentUser: (state): User | null => {
       const authStore = useAuthStore()
       return authStore.userInfo
     },
 
     // 获取活动会话
-    activeConversation(): Conversation | null {
-      if (!this.activeConversationId) return null
-      return this.conversations.find(conv => conv.id === this.activeConversationId) || null
+    activeConversation: (state): Conversation | null => {
+      if (!state.activeConversationId) return null
+      return state.conversations.find((conv: Conversation) => conv.id === state.activeConversationId) || null
     },
-    
+
     // 获取活动会话的消息
-    activeMessages(): Message[] {
-      if (!this.activeConversationId) return []
-      return this.messages[this.activeConversationId] || []
+    activeMessages: (state): Message[] => {
+      if (!state.activeConversationId) return []
+      return state.messages[state.activeConversationId] || []
     },
 
     // 根据ID获取联系人
-    getContactById(): (id: string) => User | undefined {
+    getContactById: (state) => {
       return (id: string) => {
-        return this.contacts.find(contact => contact.id === id)
+        return state.contacts.find((contact: User) => contact.id.toString() === id)
       }
     },
 
     // 获取会话对应的联系人
-    getConversationContact(): (conversation: Conversation) => User | null {
+    getConversationContact: (state) => {
       return (conversation: Conversation) => {
         const authStore = useAuthStore()
         const currentUserId = authStore.userInfo?.id
-        const otherUserId = conversation.participantIds.find(id => id !== currentUserId)
-        return otherUserId ? this.contacts.find(contact => contact.id === otherUserId) || null : null
+        const otherUserId = conversation.participantIds.find((id: string) => id !== currentUserId)
+        return otherUserId ? state.contacts.find((contact: User) => contact.id.toString() === otherUserId) || null : null
       }
     },
 
     // 获取当前用户的会话列表（按时间排序）
-    sortedConversations(): Conversation[] {
+    sortedConversations: (state): Conversation[] => {
       const authStore = useAuthStore()
       const currentUserId = authStore.userInfo?.id
       if (!currentUserId) return []
 
-      return [...this.conversations]
-        .filter(conv => conv.participantIds.includes(currentUserId))
-        .sort((a, b) => {
+      return [...state.conversations]
+        .filter((conv: Conversation) => conv.participantIds.includes(currentUserId.toString()))
+        .sort((a: Conversation, b: Conversation) => {
           return new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime()
         })
     },
 
     // 获取可以聊天的联系人（排除当前用户）
-    availableContacts(): User[] {
+    availableContacts: (state): User[] => {
       const authStore = useAuthStore()
       const currentUserId = authStore.userInfo?.id
-      
+
       if (!currentUserId) {
         console.warn('当前用户ID为空，返回空联系人列表')
         return []
       }
-      
-      const filtered = this.contacts.filter(contact => contact.id !== currentUserId)
+
+      const filtered = state.contacts.filter((contact: User) => contact.id.toString() !== currentUserId.toString())
       console.log('可用联系人数量:', filtered.length)
       return filtered
     }
   },
 
   actions: {
+    // 加载联系人数据
+    async loadContacts() {
+      ; (this as any).loading = true
+      try {
+        const response = await contactApi.getContacts()
+          // 将后端返回的数字ID转换为字符串ID，以匹配前端数据结构
+          ; (this as any).contacts = response.data.map((user: any) => ({
+            ...user,
+            id: user.id.toString(),
+            status: user.status || 'offline'
+          }))
+        console.log('加载联系人数据成功:', (this as any).contacts)
+      } catch (error) {
+        console.error('加载联系人数据失败:', error)
+      } finally {
+        ; (this as any).loading = false
+      }
+    },
+
     // 初始化用户数据
-    initializeUserData(userId: string) {
+    async initializeUserData(userId: string) {
       // 清空之前的数据
-      this.conversations = []
-      this.messages = {}
-      this.activeConversationId = null
+      ; (this as any).conversations = []
+        ; (this as any).messages = {}
+        ; (this as any).activeConversationId = null
+
+      // 加载联系人数据
+      await this.loadContacts()
 
       // 加载该用户的会话数据（模拟从服务器获取）
       this.loadUserConversations(userId)
@@ -306,8 +306,8 @@ export const useChatStore = defineStore('chat', {
 
       const userData = userConversationsData[userId]
       if (userData) {
-        this.conversations = userData.conversations
-        this.messages = userData.messages
+        ; (this as any).conversations = userData.conversations
+          ; (this as any).messages = userData.messages
       }
     },
 
@@ -315,17 +315,17 @@ export const useChatStore = defineStore('chat', {
     startConversation(contactId: string): string | null {
       const authStore = useAuthStore()
       const currentUserId = authStore.userInfo?.id
-      
+
       console.log('开始对话 - 当前用户ID:', currentUserId, '联系人ID:', contactId)
-      
+
       if (!currentUserId) {
         console.error('当前用户ID为空')
         return null
       }
 
       // 检查是否已存在对话
-      const existingConv = this.conversations.find(conv => 
-        conv.participantIds.includes(currentUserId) && 
+      const existingConv = (this as any).conversations.find((conv: Conversation) =>
+        conv.participantIds.includes(currentUserId.toString()) &&
         conv.participantIds.includes(contactId)
       )
 
@@ -337,36 +337,36 @@ export const useChatStore = defineStore('chat', {
       // 创建新对话
       const newConversation: Conversation = {
         id: `conv_${currentUserId}_${contactId}_${Date.now()}`,
-        participantIds: [currentUserId, contactId],
+        participantIds: [currentUserId.toString(), contactId],
         unreadCount: 0,
         timestamp: new Date(),
         type: 'private'
       }
-      
+
       console.log('创建新对话:', newConversation)
 
-      this.conversations.unshift(newConversation)
-      this.messages[newConversation.id] = []
-      
-      console.log('对话列表更新后:', this.conversations.length)
-      
+        ; (this as any).conversations.unshift(newConversation)
+        ; (this as any).messages[newConversation.id] = []
+
+      console.log('对话列表更新后:', (this as any).conversations.length)
+
       return newConversation.id
     },
 
     // 设置活动对话
     setActiveConversation(conversationId: string) {
       console.log('设置活动对话ID:', conversationId)
-      
-      const conversation = this.conversations.find(conv => conv.id === conversationId)
+
+      const conversation = (this as any).conversations.find((conv: Conversation) => conv.id === conversationId)
       if (!conversation) {
         console.error('找不到指定的对话:', conversationId)
-        console.log('当前所有对话:', this.conversations.map(c => c.id))
+        console.log('当前所有对话:', (this as any).conversations.map((c: Conversation) => c.id))
         return
       }
-      
-      this.activeConversationId = conversationId
+
+      ; (this as any).activeConversationId = conversationId
       conversation.unreadCount = 0
-      
+
       console.log('活动对话设置成功:', conversationId)
       console.log('对话参与者:', conversation.participantIds)
     },
@@ -375,16 +375,16 @@ export const useChatStore = defineStore('chat', {
     sendMessage(content: string) {
       const authStore = useAuthStore()
       const currentUser = authStore.userInfo
-      if (!this.activeConversationId || !currentUser) return
+      if (!(this as any).activeConversationId || !currentUser) return
 
-      const conversation = this.activeConversation
+      const conversation = (this as any).activeConversation
       if (!conversation) return
 
-      const receiverId = conversation.participantIds.find(id => id !== currentUser.id) || ''
-      
+      const receiverId = conversation.participantIds.find((id: string) => id !== currentUser.id.toString()) || ''
+
       const message: Message = {
         id: `msg_${Date.now()}`,
-        senderId: currentUser.id,
+        senderId: currentUser.id.toString(),
         receiverId,
         content,
         timestamp: new Date(),
@@ -392,11 +392,11 @@ export const useChatStore = defineStore('chat', {
         status: 'sending'
       }
 
-      if (!this.messages[this.activeConversationId]) {
-        this.messages[this.activeConversationId] = []
+      if (!(this as any).messages[(this as any).activeConversationId]) {
+        ; (this as any).messages[(this as any).activeConversationId] = []
       }
-      
-      this.messages[this.activeConversationId].push(message)
+
+      ; (this as any).messages[(this as any).activeConversationId].push(message)
 
       // 更新会话时间戳
       conversation.timestamp = new Date()
@@ -414,15 +414,16 @@ export const useChatStore = defineStore('chat', {
 
     // 设置正在输入状态
     setTyping(conversationId: string, isTyping: boolean) {
-      this.isTyping[conversationId] = isTyping
+      ; (this as any).isTyping[conversationId] = isTyping
     },
 
     // 清空数据（用户退出登录时）
     clearData() {
-      this.conversations = []
-      this.messages = {}
-      this.activeConversationId = null
-      this.isTyping = {}
+      ; (this as any).contacts = []
+        ; (this as any).conversations = []
+        ; (this as any).messages = {}
+        ; (this as any).activeConversationId = null
+        ; (this as any).isTyping = {}
     }
   }
 })

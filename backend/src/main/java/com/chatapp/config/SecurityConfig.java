@@ -45,20 +45,25 @@ public class SecurityConfig {
      */
     @Bean
     public SecurityFilterChain securityFilterChain(HttpSecurity http) throws Exception {
-        System.out.println("加载安全配置，允许匿名访问的路径: /auth/**, /api/user/list-all, /api/user/avatar/**, /user/avatar/**, /api/files/**");
+        System.out.println(
+                "加载安全配置，允许匿名访问的路径: /auth/**, /contacts/**, /api/user/list-all, /api/user/avatar/**, /user/avatar/**, /api/files/**");
         http
-            .cors(cors -> cors.configurationSource(corsConfigurationSource()))
-            .csrf(csrf -> csrf.disable())
-            .sessionManagement(session -> session
-                .sessionCreationPolicy(SessionCreationPolicy.STATELESS))
-            .authorizeHttpRequests(auth -> auth
-                .requestMatchers("/auth/**", "/api/user/list-all", "/api/user/avatar/**", "/user/avatar/**", "/api/files/**").permitAll()
-                .anyRequest().authenticated())
-            .addFilterBefore(jwtAuthenticationFilter(), UsernamePasswordAuthenticationFilter.class)
-            .exceptionHandling(exception -> exception
-                .authenticationEntryPoint((request, response, authException) -> {
-                    response.sendError(HttpServletResponse.SC_UNAUTHORIZED, "Unauthorized");
-                }));
+                .cors(cors -> cors.configurationSource(corsConfigurationSource()))
+                .csrf(csrf -> csrf.disable())
+                .sessionManagement(session -> session
+                        .sessionCreationPolicy(SessionCreationPolicy.STATELESS))
+                .authorizeHttpRequests(auth -> auth
+                        .requestMatchers("OPTIONS", "/**").permitAll() // 明确允许所有OPTIONS请求
+                        .requestMatchers("/auth/**", "/contacts/**", "/api/user/list-all", "/api/user/avatar/**",
+                                "/user/avatar/**", "/api/files/**")
+                        .permitAll()
+                        .anyRequest().authenticated())
+                .addFilterBefore(jwtAuthenticationFilter(), UsernamePasswordAuthenticationFilter.class)
+                .exceptionHandling(exception -> exception
+                        .authenticationEntryPoint((request, response, authException) -> {
+                            System.out.println("认证失败: " + request.getRequestURI() + ", 方法: " + request.getMethod());
+                            response.sendError(HttpServletResponse.SC_UNAUTHORIZED, "Unauthorized");
+                        }));
 
         return http.build();
     }
@@ -77,10 +82,10 @@ public class SecurityConfig {
     public UserDetailsService userDetailsService() {
         return username -> {
             return org.springframework.security.core.userdetails.User.builder()
-                .username(username)
-                .password("password")
-                .roles("USER")
-                .build();
+                    .username(username)
+                    .password("password")
+                    .roles("USER")
+                    .build();
         };
     }
 
@@ -90,14 +95,28 @@ public class SecurityConfig {
     @Bean
     public CorsConfigurationSource corsConfigurationSource() {
         CorsConfiguration configuration = new CorsConfiguration();
+        // 允许的源（开发环境）
         configuration.setAllowedOriginPatterns(Arrays.asList("*"));
-        configuration.setAllowedMethods(Arrays.asList("GET", "POST", "PUT", "DELETE", "OPTIONS"));
+        configuration.setAllowedOrigins(
+                Arrays.asList("http://localhost:3000", "http://localhost:5173", "http://127.0.0.1:3000"));
+        // 允许的HTTP方法
+        configuration.setAllowedMethods(Arrays.asList("GET", "POST", "PUT", "DELETE", "OPTIONS", "HEAD", "PATCH"));
+        // 允许的请求头
         configuration.setAllowedHeaders(Arrays.asList("*"));
+        // 暴露的响应头
+        configuration.setExposedHeaders(
+                Arrays.asList("Authorization", "Content-Disposition", "Access-Control-Allow-Origin"));
+        // 允许携带凭证
         configuration.setAllowCredentials(true);
+        // 预检请求缓存时间（1小时）
         configuration.setMaxAge(3600L);
 
         UrlBasedCorsConfigurationSource source = new UrlBasedCorsConfigurationSource();
         source.registerCorsConfiguration("/**", configuration);
+
+        System.out.println("CORS配置已加载：允许所有源和方法");
+        System.out.println("允许的源: " + configuration.getAllowedOriginPatterns());
+        System.out.println("允许的方法: " + configuration.getAllowedMethods());
         return source;
     }
 }

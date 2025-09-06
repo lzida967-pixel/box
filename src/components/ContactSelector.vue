@@ -6,6 +6,24 @@
     @close="handleClose"
   >
     <div class="contact-selector">
+      <div class="selector-actions">
+        <el-button 
+          type="primary" 
+          @click="showAddFriend = true"
+          icon="Plus"
+          size="small"
+        >
+          添加好友
+        </el-button>
+        <el-button 
+          @click="showFriendRequests = true"
+          icon="Message"
+          size="small"
+        >
+          好友请求
+        </el-button>
+      </div>
+      
       <el-input
         v-model="searchText"
         placeholder="搜索联系人"
@@ -38,12 +56,27 @@
         <el-empty v-if="filteredContacts.length === 0" description="没有找到联系人" />
       </div>
     </div>
+    
+    <!-- 添加好友对话框 -->
+    <AddFriendDialog 
+      v-model="showAddFriend" 
+      @friend-added="handleFriendAdded"
+    />
+    
+    <!-- 好友请求对话框 -->
+    <FriendRequestsDialog 
+      v-model="showFriendRequests"
+      @request-handled="handleRequestHandled"
+    />
   </el-dialog>
 </template>
 
 <script setup lang="ts">
 import { ref, computed } from 'vue'
+import { ElMessage } from 'element-plus'
 import { useChatStore } from '@/stores/chat'
+import AddFriendDialog from './AddFriendDialog.vue'
+import FriendRequestsDialog from './FriendRequestsDialog.vue'
 import type { User } from '@/types'
 
 interface Props {
@@ -53,6 +86,7 @@ interface Props {
 interface Emits {
   (e: 'update:modelValue', value: boolean): void
   (e: 'select', contact: User): void
+  (e: 'friends-updated'): void
 }
 
 const props = defineProps<Props>()
@@ -60,6 +94,8 @@ const emit = defineEmits<Emits>()
 
 const chatStore = useChatStore()
 const searchText = ref('')
+const showAddFriend = ref(false)
+const showFriendRequests = ref(false)
 
 const visible = computed({
   get: () => props.modelValue,
@@ -100,13 +136,32 @@ const selectContact = (contact: User) => {
 
 const handleClose = () => {
   searchText.value = ''
+  showAddFriend.value = false
+  showFriendRequests.value = false
   visible.value = false
+}
+
+const handleFriendAdded = () => {
+  ElMessage.success('好友请求已发送')
+  emit('friends-updated')
+}
+
+const handleRequestHandled = () => {
+  ElMessage.success('好友请求已处理')
+  emit('friends-updated')
 }
 </script>
 
 <style scoped>
 .contact-selector {
   max-height: 400px;
+}
+
+.selector-actions {
+  display: flex;
+  gap: 8px;
+  margin-bottom: 16px;
+  justify-content: center;
 }
 
 .search-input {

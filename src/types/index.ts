@@ -12,6 +12,26 @@ export interface User {
   status?: number // 后端使用数字状态
 }
 
+// 好友关系
+export interface Friendship {
+  id: number
+  userId: number
+  friendId: number
+  status: number // 关系状态: 0-待确认, 1-已确认, 2-已拉黑
+  nickname?: string // 好友备注昵称
+  groupName?: string // 好友分组
+  requestMessage?: string // 好友申请消息
+  createTime: string
+  updateTime: string
+}
+
+// 好友关系与用户信息DTO
+export interface FriendshipWithUser {
+  friendship: Friendship
+  fromUser?: User  // 发送请求的用户（收到的请求中使用）
+  toUser?: User    // 接收请求的用户（发送的请求中使用）
+}
+
 // 登录凭据（与后端 LoginRequest 对应）
 export interface LoginCredentials {
   account: string // 用户名/邮箱/手机号

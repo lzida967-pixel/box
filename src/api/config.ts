@@ -30,7 +30,7 @@ export const apiClient = axios.create({
 // 刷新token的标志，防止重复刷新
 let isRefreshing = false
 // 存储等待token刷新的请求
-let failedQueue: Array<{resolve: (value?: any) => void, reject: (reason?: any) => void, config: any}> = []
+let failedQueue: Array<{ resolve: (value?: any) => void, reject: (reason?: any) => void, config: any }> = []
 
 // 处理等待队列中的请求
 const processQueue = (error: any, token: string | null = null) => {
@@ -53,18 +53,18 @@ apiClient.interceptors.request.use(
   (config: InternalAxiosRequestConfig & { metadata?: any }) => {
     // 添加请求时间戳
     config.metadata = { startTime: new Date() }
-    
+
     // 如果是FormData，删除默认的Content-Type让浏览器自动设置
     if (config.data instanceof FormData) {
       console.log('检测到FormData，移除默认Content-Type')
       delete config.headers['Content-Type']
     }
-    
+
     // 添加认证令牌
     try {
       const authStore = useAuthStore()
       const token = authStore.currentUser?.token || ''
-      
+
       if (token) {
         config.headers.Authorization = `Bearer ${token}`
         console.log('已添加认证token:', token.substring(0, 10) + '...')
@@ -86,7 +86,7 @@ apiClient.interceptors.request.use(
     } catch (error) {
       console.error('处理认证头时出错:', error)
     }
-    
+
     return config
   },
   (error) => {
@@ -101,9 +101,9 @@ apiClient.interceptors.response.use(
     const endTime = new Date()
     const startTime = (response.config as any).metadata?.startTime
     const duration = startTime ? endTime.getTime() - startTime.getTime() : 0
-    
+
     console.log(`[API响应] ${response.config.method?.toUpperCase()} ${response.config.url} - ${duration}ms`)
-    
+
     // 检查响应数据格式
     if (response.data && typeof response.data === 'object') {
       // 后端统一响应格式: { code, message, data }
@@ -115,47 +115,47 @@ apiClient.interceptors.response.use(
           // 业务错误，不要在这里显示消息，让调用方处理
           const errorMessage = response.data.message || '请求失败'
           const error = new Error(errorMessage)
-          ;(error as any).response = { data: response.data }
+            ; (error as any).response = { data: response.data }
           return Promise.reject(error)
         }
       }
     }
-    
+
     // 直接返回响应数据
     return response.data
   },
   async (error) => {
     console.error('[API响应错误]', error)
-    
+
     const originalRequest = error.config
-    
+
     // 如果是401错误（token过期）且不是刷新token的请求，尝试刷新token
-    if (error.response?.status === 401 && 
-        !originalRequest._retry && 
-        !originalRequest.url?.includes('/auth/refresh')) {
-      
+    if (error.response?.status === 401 &&
+      !originalRequest._retry &&
+      !originalRequest.url?.includes('/auth/refresh')) {
+
       if (isRefreshing) {
         // 如果正在刷新token，将请求加入等待队列
         return new Promise((resolve, reject) => {
           failedQueue.push({ resolve, reject, config: originalRequest })
         })
       }
-      
+
       originalRequest._retry = true
       isRefreshing = true
-      
+
       try {
         // 获取refreshToken
         const authUser = localStorage.getItem('authUser')
         if (!authUser) {
           throw new Error('未找到用户信息')
         }
-        
+
         const user = JSON.parse(authUser)
         if (!user.refreshToken) {
           throw new Error('未找到refreshToken')
         }
-        
+
         // 调用刷新token接口
         const refreshResponse = await axios.post(
           `${API_CONFIG.BASE_URL}/auth/refresh`,
@@ -167,23 +167,23 @@ apiClient.interceptors.response.use(
             }
           }
         )
-        
+
         const newToken = refreshResponse.data.data?.token || refreshResponse.data.token
         const newRefreshToken = refreshResponse.data.data?.refreshToken || refreshResponse.data.refreshToken
-        
+
         if (newToken && newRefreshToken) {
           // 更新本地存储的token
           const updatedUser = { ...user, token: newToken, refreshToken: newRefreshToken }
           localStorage.setItem('authUser', JSON.stringify(updatedUser))
-          
+
           // 更新请求头中的token
           if (originalRequest.headers) {
             originalRequest.headers.Authorization = `Bearer ${newToken}`
           }
-          
+
           // 处理等待队列中的请求
           processQueue(null, newToken)
-          
+
           // 重新发起原始请求
           return apiClient(originalRequest)
         } else {
@@ -191,32 +191,32 @@ apiClient.interceptors.response.use(
         }
       } catch (refreshError) {
         console.error('刷新token失败:', refreshError)
-        
+
         // 刷新token失败，清除用户信息但不直接跳转
         localStorage.removeItem('authUser')
         processQueue(refreshError)
-        
+
         ElMessage.error('登录已过期，请重新登录')
         // 只在不是设置页面相关的API调用时才跳转
         // 让组件自己决定是否跳转到登录页
         if (!originalRequest.url?.includes('/user/profile')) {
           window.location.href = '/login'
         }
-        
+
         return Promise.reject(refreshError)
       } finally {
         isRefreshing = false
       }
     }
-    
+
     // 处理其他类型的错误
     let errorMessage = '网络错误，请稍后重试'
-    
+
     if (error.response) {
       // 服务器响应错误
       const status = error.response.status
       const data = error.response.data
-      
+
       switch (status) {
         case 400:
           errorMessage = data?.message || '请求参数错误'
@@ -269,7 +269,7 @@ apiClient.interceptors.response.use(
       // 其他错误
       errorMessage = error.message || '请求失败'
     }
-    
+
     ElMessage.error(errorMessage)
     return Promise.reject(error)
   }
@@ -277,19 +277,19 @@ apiClient.interceptors.response.use(
 
 // 导出常用的请求方法
 export const api = {
-  get: <T = any>(url: string, params?: any) => 
-    apiClient.get<T>(url, { params }),
-    
-  post: <T = any>(url: string, data?: any, config?: any) => 
+  get: <T = any>(url: string, config?: any) =>
+    apiClient.get<T>(url, config),
+
+  post: <T = any>(url: string, data?: any, config?: any) =>
     apiClient.post<T>(url, data, config),
-    
-  put: <T = any>(url: string, data?: any) => 
+
+  put: <T = any>(url: string, data?: any) =>
     apiClient.put<T>(url, data),
-    
-  delete: <T = any>(url: string, params?: any) => 
-    apiClient.delete<T>(url, { params }),
-    
-  patch: <T = any>(url: string, data?: any) => 
+
+  delete: <T = any>(url: string, config?: any) =>
+    apiClient.delete<T>(url, config),
+
+  patch: <T = any>(url: string, data?: any) =>
     apiClient.patch<T>(url, data)
 }
 
