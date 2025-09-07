@@ -440,52 +440,6 @@ export const useAuthStore = defineStore('auth', {
       this.error = null
     },
 
-    // 验证token有效性
-    validateToken(token: string | null): boolean {
-      if (!token) {
-        console.warn('validateToken: 无token提供')
-        return false
-      }
-      
-      try {
-        // 验证token格式: username:uuid:timestamp
-        const parts = token.split(':')
-        if (parts.length !== 3) {
-          console.warn('validateToken: token格式无效，应有3部分')
-          return false
-        }
-        
-        const [username, uuid, timestamp] = parts
-        
-        // 验证各部分
-        if (!username || !uuid || !timestamp) {
-          console.warn('validateToken: token部分为空')
-          return false
-        }
-        
-        // 验证timestamp是否为有效数字
-        const timestampNum = Number(timestamp)
-        if (isNaN(timestampNum)) {
-          console.warn('validateToken: 无效的时间戳')
-          return false
-        }
-        
-        // 检查token是否过期（假设有效期24小时）
-        const tokenAge = Date.now() - timestampNum
-        const maxAge = 24 * 60 * 60 * 1000 // 24小时
-        
-        if (tokenAge > maxAge) {
-          console.warn(`validateToken: token已过期 (${Math.floor(tokenAge / (60 * 60 * 1000))}小时)`)
-          return false
-        }
-        
-        return true
-      } catch (e) {
-        console.error('validateToken: 验证过程中出错', e)
-        return false
-      }
-    },
-
     // 检查登录状态和token有效性
     checkAuth(): boolean {
       const token = this.currentUser?.token

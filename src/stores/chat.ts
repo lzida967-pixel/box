@@ -41,10 +41,11 @@ export const useChatStore = defineStore('chat', {
       return state.messages[state.activeConversationId] || []
     },
 
-    // 根据ID获取联系人
+    // 根据ID获取联系人（支持number和string类型的ID）
     getContactById: (state) => {
-      return (id: string) => {
-        return state.contacts.find((contact: User) => contact.id.toString() === id)
+      return (id: string | number) => {
+        const idStr = id.toString()
+        return state.contacts.find((contact: User) => contact.id.toString() === idStr)
       }
     },
 
@@ -53,9 +54,25 @@ export const useChatStore = defineStore('chat', {
       return (conversation: Conversation) => {
         const authStore = useAuthStore()
         const currentUserId = authStore.userInfo?.id
-        const otherUserId = conversation.participantIds.find((id: string) => id !== currentUserId)
+        const currentUserIdStr = currentUserId?.toString()
+        const otherUserId = conversation.participantIds.find((id: string) => id !== currentUserIdStr)
         return otherUserId ? state.contacts.find((contact: User) => contact.id.toString() === otherUserId) || null : null
       }
+    },
+
+    // 获取可以聊天的联系人（排除当前用户）
+    availableContacts: (state): User[] => {
+      const authStore = useAuthStore()
+      const currentUserId = authStore.userInfo?.id
+
+      if (!currentUserId) {
+        console.warn('当前用户ID为空，返回空联系人列表')
+        return []
+      }
+
+      const filtered = state.contacts.filter((contact: User极速版) => contact.id.toString() !== currentUserId.toString())
+      console.log('可用联系人数量:', filtered.length)
+      return filtered
     },
 
     // 获取当前用户的会话列表（按时间排序）
@@ -69,21 +86,6 @@ export const useChatStore = defineStore('chat', {
         .sort((a: Conversation, b: Conversation) => {
           return new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime()
         })
-    },
-
-    // 获取可以聊天的联系人（排除当前用户）
-    availableContacts: (state): User[] => {
-      const authStore = useAuthStore()
-      const currentUserId = authStore.userInfo?.id
-
-      if (!currentUserId) {
-        console.warn('当前用户ID为空，返回空联系人列表')
-        return []
-      }
-
-      const filtered = state.contacts.filter((contact: User) => contact.id.toString() !== currentUserId.toString())
-      console.log('可用联系人数量:', filtered.length)
-      return filtered
     }
   },
 
@@ -97,9 +99,18 @@ export const useChatStore = defineStore('chat', {
           ; (this as any).contacts = response.data.map((user: any) => ({
             ...user,
             id: user.id.toString(),
-            status: user.status || 'offline'
+            // 保持status为数字类型，与User接口一致
+            status: user.status || 0,
+            // 确保avatar字段有正确的URL前缀（如果需要）
+            avatar: user.avatar ? (user.avatar.startsWith('http') ? user.avatar : `/api${user.avatar}`) : undefined
           }))
         console.log('加载联系人数据成功:', (this as any).contacts)
+        // 调试avatar字段
+        if ((this as any).contacts.length > 0) {
+          const firstContact = (this as any).contacts[0]
+          console.log('第一个联系人的avatar字段:', firstContact.avatar)
+          console.log('第一个联系人的所有字段:', firstContact)
+        }
       } catch (error) {
         console.error('加载联系人数据失败:', error)
       } finally {
@@ -139,7 +150,7 @@ export const useChatStore = defineStore('chat', {
               participantIds: ['1', '3'],
               unreadCount: 0,
               timestamp: new Date(Date.now() - 3600000),
-              type: 'private'
+              type极速版: 'private'
             }
           ],
           messages: {
@@ -154,7 +165,7 @@ export const useChatStore = defineStore('chat', {
                 status: 'read'
               }
             ],
-            'conv_1_3': [
+            'conv_1极速版_3': [
               {
                 id: 'msg2',
                 senderId: '3',
@@ -246,7 +257,7 @@ export const useChatStore = defineStore('chat', {
           conversations: [
             {
               id: 'conv_4_1',
-              participantIds: ['4', '1'],
+              participantIds: ['极速版4', '1'],
               unreadCount: 0,
               timestamp: new Date(Date.now() - 900000),
               type: 'private'
@@ -269,7 +280,7 @@ export const useChatStore = defineStore('chat', {
           messages: {
             'conv_4_1': [
               {
-                id: 'msg7',
+                id极速版: 'msg7',
                 senderId: '4',
                 receiverId: '1',
                 content: '张三，请查看新的项目文档',
@@ -317,27 +328,36 @@ export const useChatStore = defineStore('chat', {
       const currentUserId = authStore.userInfo?.id
 
       console.log('开始对话 - 当前用户ID:', currentUserId, '联系人ID:', contactId)
+      console.log('当前用户ID类型:', typeof currentUserId)
+      console.log('联系人ID类型:', typeof contactId)
 
       if (!currentUserId) {
         console.error('当前用户ID为空')
         return null
       }
 
+      // 确保所有ID都是字符串类型进行比较
+      const currentUserIdStr = currentUserId.toString()
+      const contactIdStr = contactId.toString()
+
+      console.log('字符串类型 - 当前用户ID:', currentUserIdStr, '联系人ID:', contactIdStr)
+
       // 检查是否已存在对话
       const existingConv = (this as any).conversations.find((conv: Conversation) =>
-        conv.participantIds.includes(currentUserId.toString()) &&
-        conv.participantIds.includes(contactId)
+        conv.participantIds.includes(currentUserIdStr) &&
+        conv.participantIds.includes(contactIdStr)
       )
 
       if (existingConv) {
         console.log('找到已存在的对话:', existingConv.id)
+        console.log('对话参与者:', existingConv.participantIds)
         return existingConv.id
       }
 
       // 创建新对话
       const newConversation: Conversation = {
-        id: `conv_${currentUserId}_${contactId}_${Date.now()}`,
-        participantIds: [currentUserId.toString(), contactId],
+        id: `conv_${currentUserIdStr}_${contactIdStr}_${Date.now()}`,
+        participantIds: [currentUserIdStr, contactIdStr],
         unreadCount: 0,
         timestamp: new Date(),
         type: 'private'
@@ -348,7 +368,8 @@ export const useChatStore = defineStore('chat', {
         ; (this as any).conversations.unshift(newConversation)
         ; (this as any).messages[newConversation.id] = []
 
-      console.log('对话列表更新后:', (this as any).conversations.length)
+      console.log('对话列表更新后:', (this as any).conversations)
+      console.log('新对话ID:', newConversation.id)
 
       return newConversation.id
     },
@@ -414,7 +435,7 @@ export const useChatStore = defineStore('chat', {
 
     // 设置正在输入状态
     setTyping(conversationId: string, isTyping: boolean) {
-      ; (this as any).isTyping[conversationId] = isTyping
+      ; (this as any).isTyping[conversation极速版Id] = isTyping
     },
 
     // 清空数据（用户退出登录时）

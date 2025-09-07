@@ -1,0 +1,220 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>WebSocket 测试页面</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            margin: 20px;
+            background-color: #f5f5f5;
+        }
+        .container {
+            max-width: 800px;
+            margin: 0 auto;
+            background: white;
+            padding: 20px;
+            border-radius: 8px;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+        }
+        .status {
+            padding: 10px;
+            margin: 10px 0;
+            border-radius: 4px;
+            font-weight: bold;
+        }
+        .connected {
+            background-color: #d4edda;
+            color: #155724;
+            border: 1px solid #c3e6cb;
+        }
+        .disconnected {
+            background-color: #f8d7da;
+            color: #721c24;
+            border: 1px solid #f5c6cb;
+        }
+        .message-log {
+            height: 300px;
+            border: 1px solid #ddd;
+            padding: 10px;
+            overflow-y: auto;
+            margin: 10px 0;
+            background-color: #fafafa;
+        }
+        .input-group {
+            margin: 10px 0;
+        }
+        input, button {
+            padding: 8px;
+            margin: 5px;
+            border: 1px solid #ddd;
+            border-radius: 4px;
+        }
+        button {
+            background-color: #007bff;
+            color: white;
+            cursor: pointer;
+        }
+        button:hover {
+            background-color: #0056b3;
+        }
+        .message {
+            margin: 5px 0;
+            padding: 5px;
+            border-left: 3px solid #007bff;
+        }
+        .error {
+            color: #dc3545;
+            border-left-color: #dc3545;
+        }
+        .success {
+            color: #28a745;
+            border-left-color: #28a745;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>WebSocket 聊天功能测试</h1>
+        
+        <div class="status disconnected" id="status">未连接</div>
+        
+        <div class="input-group">
+            <input type="number" id="userId" placeholder="用户ID" value="1">
+            <button onclick="connect()">连接</button>
+            <button onclick="disconnect()">断开</button>
+        </div>
+
+        <div class="input-group">
+            <input type="number" id="toUserId" placeholder="接收用户ID" value="2">
+            <input type="text" id="message" placeholder="消息内容">
+            <button onclick="sendPrivateMessage()">发送私聊消息</button>
+        </div>
+
+        <div class="input-group">
+            <input type="number" id="groupId" placeholder="群组ID" value="1">
+            <input type="text" id="groupMessage" placeholder="群消息内容">
+            <button onclick="sendGroupMessage()">发送群消息</button>
+        </div>
+
+        <div class="message-log" id="messageLog"></div>
+    </div>
+
+    <script>
+        let ws = null;
+        const statusEl = document.getElementById('status');
+        const messageLog = document.getElementById('messageLog');
+
+        function connect() {
+            const userId = document.getElementById('userId').value;
+            if (!userId) {
+                alert('请输入用户ID');
+                return;
+            }
+
+            // 实际项目中应该使用wss://和正确的域名
+            ws = new WebSocket(`ws://localhost:8080/ws/chat`);
+            
+            ws.onopen = function() {
+                statusEl.className = 'status connected';
+                statusEl.textContent = '已连接';
+                logMessage('连接成功', 'success');
+                
+                // 发送认证消息（实际项目中应该发送token）
+                ws.send(JSON.stringify({
+                    type: 'auth',
+                    userId: parseInt(userId)
+                }));
+            };
+
+            ws.onmessage = function(event) {
+                try {
+                    const data = JSON.parse(event.data);
+                    logMessage(`收到消息: ${JSON.stringify(data)}`, 'info');
+                } catch (e) {
+                    logMessage(`收到非JSON消息: ${event.data}`, 'error');
+                }
+            };
+
+            ws.onclose = function() {
+                statusEl.className = 'status disconnected';
+                statusEl.textContent = '已断开';
+                logMessage('连接已关闭', 'info');
+            };
+
+            ws.onerror = function(error) {
+                logMessage(`连接错误: ${error}`, 'error');
+            };
+        }
+
+        function disconnect() {
+            if (ws) {
+                ws.close();
+                ws = null;
+            }
+        }
+
+        function sendPrivateMessage() {
+            if (!ws || ws.readyState !== WebSocket.OPEN) {
+                alert('请先连接WebSocket');
+                return;
+            }
+
+            const toUserId = document.getElementById('toUserId').value;
+            const content = document.getElementById('message').value;
+            
+            if (!toUserId || !content) {
+                alert('请输入接收用户ID和消息内容');
+                return;
+            }
+
+            const message = {
+                type: 'private',
+                toUserId: parseInt(toUserId),
+                content: content,
+                messageType: 1
+            };
+
+            ws.send(JSON.stringify(message));
+            logMessage(`发送私聊消息: ${JSON.stringify(message)}`, 'info');
+        }
+
+        function sendGroupMessage() {
+            if (!ws || ws.readyState !== WebSocket.OPEN) {
+                alert('请先连接WebSocket');
+                return;
+            }
+
+            const groupId = document.getElementById('groupId').value;
+            const content = document.getElementById('groupMessage').value;
+            
+            if (!groupId || !content) {
+                alert('请输入群组ID和消息内容');
+                return;
+            }
+
+            const message = {
+                type: 'group',
+                groupId: parseInt(groupId),
+                content: content,
+                messageType: 1
+            };
+
+            ws.send(JSON.stringify(message));
+            logMessage(`发送群消息: ${JSON.stringify(message)}`, 'info');
+        }
+
+        function logMessage(text, type = 'info') {
+            const messageEl = document.createElement('div');
+            messageEl.className = `message ${type}`;
+            messageEl.textContent = `[${new Date().toLocaleTimeString()}] ${text}`;
+            messageLog.appendChild(messageEl);
+            messageLog.scrollTop = messageLog.scrollHeight;
+        }
+
+        // 页面加载时自动连接（可选）
+        // connect();
+    </script>
+</body>
+</html>

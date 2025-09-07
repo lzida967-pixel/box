@@ -183,8 +183,6 @@
                 <span>{{ selectedFriend.gender ? getGenderText(selectedFriend.gender) : '' }}</span>
               </div>
               
-
-              
               <div class="info-item">
                 <label>签名:</label>
                 <span class="signature">{{ selectedFriend.signature || '' }}</span>
@@ -214,31 +212,16 @@
         </div>
       </template>
       
-      <!-- 其他页面显示聊天区域 -->
-      <template v-else>
+      <!-- 消息页面显示聊天区域 -->
+      <template v-else-if="activeTab === 'messages'">
         <template v-if="chatStore.activeConversationId">
-          <!-- 聊天头部 -->
-          <div class="chat-header">
-            <div class="contact-info">
-              <el-avatar :src="currentContact?.avatar" :size="36" />
-              <div class="contact-details">
-                <div class="contact-name">{{ currentContact?.name }}</div>
-                <div class="contact-status">{{ currentContact?.status === 'online' ? '在线' : '离线' }}</div>
-              </div>
-            </div>
-            
-            <div class="chat-actions">
-              <el-button text @click="showContactInfo = true">
-                <el-icon><More /></el-icon>
-              </el-button>
-            </div>
-          </div>
-
-          <!-- 消息列表 -->
-          <MessageList :messages="chatStore.activeMessages" />
-
-          <!-- 消息输入框 -->
-          <MessageInput @send="handleSendMessage" />
+          <!-- 聊天界面 -->
+          <ChatInterface 
+            :messages="chatStore.activeMessages"
+            :contact="currentContact"
+            @send="handleSendMessage"
+            @showContactInfo="showContactInfo = true"
+          />
         </template>
         
         <!-- 空状态 -->
@@ -295,15 +278,14 @@
 
 <script setup lang="ts">
 import { ref, computed, onMounted } from 'vue'
-import { useRouter } from 'vue-router'
+import { useRouter, useRoute } from 'vue-router'
 import ElMessage from 'element-plus/es/components/message/index.mjs'
 import ElMessageBox from 'element-plus/es/components/message-box/index.mjs'
 import { Edit } from '@element-plus/icons-vue'
 import { useAuthStore } from '@/stores/auth'
 import { useChatStore } from '@/stores/chat'
 import { contactApi } from '@/api'
-import MessageList from '@/components/MessageList.vue'
-import MessageInput from '@/components/MessageInput.vue'
+import ChatInterface from '@/components/ChatInterface.vue'
 import ContactSelector from '@/components/ContactSelector.vue'
 import ContactInfo from '@/components/ContactInfo.vue'
 import SettingsDialog from '@/components/SettingsDialog.vue'
@@ -312,6 +294,7 @@ import type { User, Conversation, Message } from '@/types'
 import dayjs from 'dayjs'
 
 const router = useRouter()
+const route = useRoute()
 const authStore = useAuthStore()
 const chatStore = useChatStore()
 
@@ -413,16 +396,22 @@ const handleSelectContact = (contact: User) => {
     return
   }
   
-  console.log('选择联系人:', contact)
+  console.log('选择联系人开始聊天:', contact)
+  console.log('当前用户ID:', authStore.userInfo?.id)
+  console.log('联系人ID:', contact.id)
+  console.log('联系人ID类型:', typeof contact.id)
   
   // 开始与选中联系人的对话
-  const conversationId = chatStore.startConversation(contact.id)
+  const conversationId = chatStore.startConversation(contact.id.toString())
   console.log('创建/找到对话ID:', conversationId)
+  console.log('当前所有对话:', chatStore.conversations)
   
   if (conversationId) {
     chatStore.setActiveConversation(conversationId)
     console.log('设置活动对话:', conversationId)
+    console.log('活动对话设置后:', chatStore.activeConversationId)
     activeTab.value = 'messages'
+    console.log('切换到消息标签页')
   } else {
     console.error('无法创建或找到对话')
   }
@@ -452,6 +441,8 @@ const handleLogout = async () => {
 // 添加好友页面需要的聊天启动方法
 const startChatWithContact = (contact: User) => {
   handleSelectContact(contact)
+  // 自动切换到消息标签页显示聊天界面
+  activeTab.value = 'messages'
 }
 
 // 处理好友选中事件
@@ -579,6 +570,27 @@ onMounted(async () => {
   const currentUser = authStore.userInfo
   if (currentUser && currentUser.id) {
     await chatStore.initializeUserData(currentUser.id)
+  }
+  
+  // 处理路由参数，从好友详情跳转时自动开始聊天
+  const friendId = route.query.friendId as string
+  const friendName = route.query.friendName as string
+  
+  if (friendId) {
+    // 模拟好友对象
+    const friend: User = {
+      id: parseInt(friendId), // 这里保持数字类型，handleSelectContact会转换为字符串
+      username: friendName || '好友',
+      nickname: friendName || '好友',
+      status: 1 // 在线状态
+    }
+    
+    // 延迟执行以确保聊天存储已初始化
+    setTimeout(() => {
+      handleSelectContact(friend)
+      // 切换到消息标签页
+      activeTab.value = 'messages'
+    }, 100)
   }
 })
 </script>

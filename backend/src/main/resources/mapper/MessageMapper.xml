@@ -1,0 +1,134 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.chatapp.mapper.MessageMapper">
+
+    <resultMap id="MessageResultMap" type="com.chatapp.entity.Message">
+        <id property="id" column="id" />
+        <result property="fromUserId" column="from_user_id" />
+        <result property="toUserId" column="to_user_id" />
+        <result property="groupId" column="group_id" />
+        <result property="messageType" column="message_type" />
+        <result property="content" column="content" />
+        <result property="fileUrl" column="file_url" />
+        <result property="fileName" column="file_name" />
+        <result property="fileSize" column="file_size" />
+        <result property="status" column="status" />
+        <result property="replyToId" column="reply_to_id" />
+        <result property="sendTime" column="send_time" />
+        <result property="readTime" column="read_time" />
+        <result property="createTime" column="create_time" />
+        <result property="updateTime" column="update_time" />
+        <result property="deleted" column="deleted" />
+    </resultMap>
+
+    <select id="findById" resultMap="MessageResultMap">
+        SELECT * FROM messages WHERE id = #{id} AND deleted = 0
+    </select>
+
+    <insert id="insert" parameterType="com.chatapp.entity.Message" useGeneratedKeys="true" keyProperty="id">
+        INSERT INTO messages (from_user_id, to_user_id, group_id, message_type, content, file_url, file_name, file_size, status, reply_to_id, send_time, read_time, create_time, update_time)
+        VALUES (#{fromUserId}, #{toUserId}, #{groupId}, #{messageType}, #{content}, #{fileUrl}, #{fileName}, #{fileSize}, #{status}, #{replyToId}, #{sendTime}, #{readTime}, #{createTime}, #{updateTime})
+    </insert>
+
+    <update id="update" parameterType="com.chatapp.entity.Message">
+        UPDATE messages 
+        <set>
+            <if test="status != null">status = #{status},</if>
+            <if test="readTime != null">read_time = #{readTime},</if>
+            <if test="content != null">content = #{content},</if>
+            <if test="fileUrl != null">file_url = #{fileUrl},</if>
+            <if test="fileName != null">file_name = #{fileName},</if>
+            <if test="fileSize != null">file_size = #{fileSize},</if>
+            update_time = NOW()
+        </set>
+        WHERE id = #{id} AND deleted = 0
+    </update>
+
+    <update id="deleteById">
+        UPDATE messages SET deleted = 1, update_time = NOW() WHERE id = #{id}
+    </update>
+
+    <select id="findPrivateMessages" resultMap="MessageResultMap">
+        SELECT * FROM messages 
+        WHERE deleted = 0 
+        AND ((from_user_id = #{userId1} AND to_user_id = #{userId2}) 
+             OR (from_user_id = #{userId2} AND to_user_id = #{userId1}))
+        ORDER BY send_time DESC
+        <if test="limit != null">LIMIT #{limit}</if>
+        <if test="offset != null">OFFSET #{offset}</if>
+    </select>
+
+    <select id="findGroupMessages" resultMap="MessageResultMap">
+        SELECT * FROM messages 
+        WHERE deleted = 0 
+        AND group_id = #{groupId}
+        ORDER BY send_time DESC
+        <if test="limit != null">LIMIT #{limit}</if>
+        <if test="offset != null">OFFSET #{offset}</if>
+    </select>
+
+    <select id="countUnreadMessages" resultType="int">
+        SELECT COUNT(*) FROM messages 
+        WHERE to_user_id = #{userId} 
+        AND status = 0 
+        AND deleted = 0
+    </select>
+
+    <select id="countUnreadMessagesFromUser" resultType="int">
+        SELECT COUNT(*) FROM messages 
+        WHERE to_user_id = #{userId} 
+        AND from_user_id = #{fromUserId}
+        AND status = 0 
+        AND deleted = 0
+    </select>
+
+    <update id="markAsRead">
+        UPDATE messages SET status = 1, read_time = NOW(), update_time = NOW()
+        WHERE id = #{messageId} AND deleted = 0
+    </update>
+
+    <update id="markAllAsRead">
+        UPDATE messages SET status = 1, read_time = NOW(), update_time = NOW()
+        WHERE to_user_id = #{userId} 
+        AND from_user_id = #{fromUserId}
+        AND status = 0 
+        AND deleted = 0
+    </update>
+
+    <update id="recallMessage">
+        UPDATE messages SET status = 2, content = '消息已撤回', update_time = NOW()
+        WHERE id = #{messageId} AND deleted = 0
+    </update>
+
+    <select id="findRecentContacts" resultType="long">
+        SELECT DISTINCT 
+            CASE 
+                WHEN from_user_id = #{userId} THEN to_user_id
+                ELSE from_user_id
+            END as contact_id
+        FROM messages 
+        WHERE deleted = 0 
+        AND (from_user_id = #{userId} OR to_user_id = #{userId})
+        AND group_id IS NULL
+        ORDER BY send_time DESC
+        LIMIT #{limit}
+    </select>
+
+    <select id="findLastMessage" resultMap="MessageResultMap">
+        SELECT * FROM messages 
+        WHERE deleted = 0 
+        AND (
+            (from_user_id = #{userId} AND to_user_id = #{contactId})
+            OR (from_user_id = #{contactId} AND to_user_id = #{userId})
+        )
+        <if test="isGroup">
+            AND group_id = #{contactId}
+        </if>
+        <if test="!isGroup">
+            AND group_id IS NULL
+        </if>
+        ORDER BY send_time DESC 
+        LIMIT 1
+    </select>
+
+</mapper>

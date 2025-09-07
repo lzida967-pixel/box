@@ -13,12 +13,12 @@
       <div class="contact-details">
         <div class="detail-item">
           <label>用户名:</label>
-          <span>{{ contact.name }}</span>
+          <span>{{ contact.username || contact.name || '未知' }}</span>
         </div>
         
         <div class="detail-item">
           <label>昵称:</label>
-          <span>{{ contact.name }}</span>
+          <span>{{ contact.nickname || contact.name || '未设置' }}</span>
         </div>
         
         <div class="detail-item">
@@ -30,7 +30,7 @@
         
         <div class="detail-item">
           <label>性别:</label>
-          <span>{{ contact.email ? '未设置' : '未知' }}</span>
+          <span>{{ getGenderText(contact.gender) }}</span>
         </div>
         
         <div class="detail-item" v-if="contact.email">
@@ -94,6 +94,15 @@ const getStatusText = (status: string) => {
     case 'online': return '在线'
     case 'away': return '离开'
     case 'offline': return '离线'
+    default: return '未知'
+  }
+}
+
+const getGenderText = (gender?: number) => {
+  switch (gender) {
+    case 1: return '男'
+    case 2: return '女'
+    case 0:
     default: return '未知'
   }
 }

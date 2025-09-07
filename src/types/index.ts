@@ -10,6 +10,8 @@ export interface User {
   avatar?: string
   signature?: string
   status?: number // 后端使用数字状态
+  gender?: number // 性别: 0-未知, 1-男, 2-女
+  name?: string // 显示名称（兼容字段）
 }
 
 // 好友关系
@@ -89,15 +91,20 @@ export interface UserAccount {
 
 // ==================== 聊天相关类型 ====================
 
-// 消息
+// 消息（与后端Message实体对应）
 export interface Message {
-  id: string
-  senderId: string
-  receiverId: string
+  id: number
+  senderId: number
+  receiverId: number
+  groupId?: number
   content: string
-  timestamp: Date
-  type: 'text' | 'image' | 'file'
-  status: 'sending' | 'sent' | 'delivered' | 'read'
+  messageType: 'text' | 'image' | 'file' | 'system'
+  status: 'sending' | 'sent' | 'delivered' | 'read' | 'recalled'
+  createTime: string
+  updateTime: string
+  isRecalled: boolean
+  recallTime?: string
+  readTime?: string
 }
 
 // 会话

@@ -151,12 +151,25 @@ export const userApi = {
 
 export const chatApi = {
   /**
-   * 获取聊天记录
+   * 获取私聊消息记录
    */
-  getMessages: (conversationId: string, page = 1, size = 50): Promise<ApiResponse<any[]>> => {
-    return api.get('/chat/messages', {
+  getPrivateMessages: (friendId: number, page = 1, size = 50): Promise<ApiResponse<any[]>> => {
+    return api.get('/messages/private', {
       params: {
-        conversationId,
+        friendId,
+        page,
+        size
+      }
+    })
+  },
+
+  /**
+   * 获取群聊消息记录
+   */
+  getGroupMessages: (groupId: number, page = 1, size = 50): Promise<ApiResponse<any[]>> => {
+    return api.get('/messages/group', {
+      params: {
+        groupId,
         page,
         size
       }
@@ -167,7 +180,7 @@ export const chatApi = {
    * 发送消息
    */
   sendMessage: (message: any): Promise<ApiResponse<any>> => {
-    return api.post('/chat/send', message)
+    return api.post('/messages/send', message)
   },
 
   /**

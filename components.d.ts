@@ -8,6 +8,7 @@ export {}
 declare module 'vue' {
   export interface GlobalComponents {
     AddFriendDialog: typeof import('./src/components/AddFriendDialog.vue')['default']
+    ChatInterface: typeof import('./src/components/ChatInterface.vue')['default']
     ContactInfo: typeof import('./src/components/ContactInfo.vue')['default']
     ContactList: typeof import('./src/components/ContactList.vue')['default']
     ContactSelector: typeof import('./src/components/ContactSelector.vue')['default']
@@ -15,12 +16,8 @@ declare module 'vue' {
     ElAvatar: typeof import('element-plus/es')['ElAvatar']
     ElBadge: typeof import('element-plus/es')['ElBadge']
     ElButton: typeof import('element-plus/es')['ElButton']
-    ElCard: typeof import('element-plus/es')['ElCard']
     ElCheckbox: typeof import('element-plus/es')['ElCheckbox']
     ElDialog: typeof import('element-plus/es')['ElDialog']
-    ElDropdown: typeof import('element-plus/es')['ElDropdown']
-    ElDropdownItem: typeof import('element-plus/es')['ElDropdownItem']
-    ElDropdownMenu: typeof import('element-plus/es')['ElDropdownMenu']
     ElEmpty: typeof import('element-plus/es')['ElEmpty']
     ElForm: typeof import('element-plus/es')['ElForm']
     ElFormItem: typeof import('element-plus/es')['ElFormItem']
@@ -32,7 +29,6 @@ declare module 'vue' {
     ElTabPane: typeof import('element-plus/es')['ElTabPane']
     ElTabs: typeof import('element-plus/es')['ElTabs']
     ElTag: typeof import('element-plus/es')['ElTag']
-    ElText: typeof import('element-plus/es')['ElText']
     FriendRequestsDialog: typeof import('./src/components/FriendRequestsDialog.vue')['default']
     FriendsPage: typeof import('./src/components/FriendsPage.vue')['default']
     MessageInput: typeof import('./src/components/MessageInput.vue')['default']
