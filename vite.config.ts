@@ -29,5 +29,8 @@ export default defineConfig({
   },
   optimizeDeps: {
     include: ['axios']
+  },
+  build: {
+    target: 'es2022'
   }
 })

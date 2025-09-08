@@ -1,0 +1,92 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.chatapp.mapper.UserSessionMapper">
+
+    <resultMap id="UserSessionResultMap" type="com.chatapp.entity.UserSession">
+        <id property="id" column="id" />
+        <result property="userId" column="user_id" />
+        <result property="sessionId" column="session_id" />
+        <result property="connectTime" column="connect_time" />
+        <result property="lastHeartbeat" column="last_heartbeat" />
+        <result property="clientInfo" column="client_info" />
+        <result property="ipAddress" column="ip_address" />
+        <result property="status" column="status" />
+        <result property="createTime" column="create_time" />
+        <result property="updateTime" column="update_time" />
+    </resultMap>
+
+    <select id="findById" resultMap="UserSessionResultMap">
+        SELECT * FROM user_sessions WHERE id = #{id}
+    </select>
+
+    <select id="findBySessionId" resultMap="UserSessionResultMap">
+        SELECT * FROM user_sessions WHERE session_id = #{sessionId}
+    </select>
+
+    <select id="findActiveSessionsByUserId" resultMap="UserSessionResultMap">
+        SELECT * FROM user_sessions 
+        WHERE user_id = #{userId} AND status = 1
+        ORDER BY last_heartbeat DESC
+    </select>
+
+    <insert id="insert" parameterType="com.chatapp.entity.UserSession" useGeneratedKeys="true" keyProperty="id">
+        INSERT INTO user_sessions (user_id, session_id, connect_time, last_heartbeat, client_info, ip_address, status, create_time, update_time)
+        VALUES (#{userId}, #{sessionId}, #{connectTime}, #{lastHeartbeat}, #{clientInfo}, #{ipAddress}, #{status}, #{createTime}, #{updateTime})
+    </insert>
+
+    <update id="update" parameterType="com.chatapp.entity.UserSession">
+        UPDATE user_sessions 
+        <set>
+            <if test="lastHeartbeat != null">last_heartbeat = #{lastHeartbeat},</if>
+            <if test="clientInfo != null">client_info = #{clientInfo},</if>
+            <if test="ipAddress != null">ip_address = #{ipAddress},</if>
+            <if test="status != null">status = #{status},</if>
+            update_time = NOW()
+        </set>
+        WHERE id = #{id}
+    </update>
+
+    <update id="updateHeartbeat">
+        UPDATE user_sessions 
+        SET last_heartbeat = #{heartbeatTime}, update_time = NOW()
+        WHERE session_id = #{sessionId}
+    </update>
+
+    <update id="setOffline">
+        UPDATE user_sessions 
+        SET status = 0, update_time = NOW()
+        WHERE session_id = #{sessionId}
+    </update>
+
+    <update id="setAllOfflineByUserId">
+        UPDATE user_sessions 
+        SET status = 0, update_time = NOW()
+        WHERE user_id = #{userId}
+    </update>
+
+    <delete id="deleteBySessionId">
+        DELETE FROM user_sessions WHERE session_id = #{sessionId}
+    </delete>
+
+    <delete id="cleanExpiredSessions">
+        DELETE FROM user_sessions 
+        WHERE status = 0 AND update_time &lt; #{expireTime}
+    </delete>
+
+    <select id="getOnlineUserIds" resultType="long">
+        SELECT DISTINCT user_id FROM user_sessions 
+        WHERE status = 1 AND last_heartbeat > DATE_SUB(NOW(), INTERVAL 5 MINUTE)
+    </select>
+
+    <select id="isUserOnline" resultType="boolean">
+        SELECT COUNT(*) > 0 FROM user_sessions 
+        WHERE user_id = #{userId} AND status = 1 
+        AND last_heartbeat > DATE_SUB(NOW(), INTERVAL 5 MINUTE)
+    </select>
+
+    <select id="countActiveSessionsByUserId" resultType="int">
+        SELECT COUNT(*) FROM user_sessions 
+        WHERE user_id = #{userId} AND status = 1
+    </select>
+
+</mapper>

@@ -9,6 +9,8 @@ import App from './App.vue'
 import LoginView from './views/LoginView.vue'
 import ChatView from './views/ChatView.vue'
 import DebugView from './views/DebugView.vue'
+import WebSocketTestView from './views/WebSocketTestView.vue'
+import FriendChatTest from './components/FriendChatTest.vue'
 import { useAuthStore } from './stores/auth'
 import './style.css'
 
@@ -40,6 +42,16 @@ const routes = [
     path: '/debug',
     component: DebugView,
     meta: { requiresAuth: false }
+  },
+  {
+    path: '/websocket-test',
+    component: WebSocketTestView,
+    meta: { requiresAuth: true }
+  },
+  {
+    path: '/friend-chat-test',
+    component: FriendChatTest,
+    meta: { requiresAuth: true }
   }
 ]
 
@@ -93,6 +105,17 @@ app.use(ElementPlus)
 
 // 应用启动后恢复认证状态
 const authStore = useAuthStore()
-authStore.restoreAuth()
+const isRestored = authStore.restoreAuth()
+
+// 如果成功恢复认证状态，初始化WebSocket连接
+if (isRestored) {
+  try {
+    const { getWebSocketService } = await import('./services/websocket')
+    const wsService = getWebSocketService()
+    wsService.connect()
+  } catch (error) {
+    console.warn('WebSocket初始化失败:', error)
+  }
+}
 
 app.mount('#app')

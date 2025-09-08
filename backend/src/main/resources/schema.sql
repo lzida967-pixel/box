@@ -144,3 +144,43 @@ ALTER TABLE users MODIFY COLUMN email VARCHAR(100) NULL;
 
 ALTER TABLE users ADD COLUMN avatar_data LONGBLOB COMMENT '头像二进制数据';
 ALTER TABLE users ADD COLUMN avatar_content_type VARCHAR(100) COMMENT '头像文件类型';
+
+-- 创建在线用户会话表
+CREATE TABLE IF NOT EXISTS user_sessions (
+    id BIGINT AUTO_INCREMENT PRIMARY KEY COMMENT '会话ID',
+    user_id BIGINT NOT NULL COMMENT '用户ID',
+    session_id VARCHAR(255) NOT NULL COMMENT 'WebSocket会话ID',
+    connect_time TIMESTAMP DEFAULT CURRENT_TIMESTAMP COMMENT '连接时间',
+    last_heartbeat TIMESTAMP DEFAULT CURRENT_TIMESTAMP COMMENT '最后心跳时间',
+    client_info VARCHAR(500) COMMENT '客户端信息',
+    ip_address VARCHAR(50) COMMENT 'IP地址',
+    STATUS INT DEFAULT 1 COMMENT '会话状态: 0-离线, 1-在线',
+    create_time TIMESTAMP DEFAULT CURRENT_TIMESTAMP COMMENT '创建时间',
+    update_time TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP COMMENT '更新时间',
+
+    UNIQUE KEY uk_session_id (session_id),
+    INDEX idx_user_id (user_id),
+    INDEX idx_status (STATUS),
+    INDEX idx_last_heartbeat (last_heartbeat),
+    FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
+) ENGINE=INNODB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci COMMENT='用户在线会话表';
+
+-- 创建消息推送记录表
+CREATE TABLE IF NOT EXISTS message_push_records (
+    id BIGINT AUTO_INCREMENT PRIMARY KEY COMMENT '推送记录ID',
+    message_id BIGINT NOT NULL COMMENT '消息ID',
+    user_id BIGINT NOT NULL COMMENT '接收用户ID',
+    push_status INT DEFAULT 0 COMMENT '推送状态: 0-待推送, 1-已推送, 2-推送失败',
+    push_time TIMESTAMP NULL COMMENT '推送时间',
+    retry_count INT DEFAULT 0 COMMENT '重试次数',
+    error_message VARCHAR(500) COMMENT '错误信息',
+    create_time TIMESTAMP DEFAULT CURRENT_TIMESTAMP COMMENT '创建时间',
+    update_time TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP COMMENT '更新时间',
+
+    INDEX idx_message_id (message_id),
+    INDEX idx_user_id (user_id),
+    INDEX idx_push_status (push_status),
+    INDEX idx_create_time (create_time),
+    FOREIGN KEY (message_id) REFERENCES messages(id) ON DELETE CASCADE,
+    FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
+) ENGINE=INNODB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci COMMENT='消息推送记录表';

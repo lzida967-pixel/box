@@ -2,6 +2,7 @@ import { defineStore } from 'pinia'
 import type { User, Message, Conversation } from '@/types'
 import { useAuthStore } from './auth'
 import { contactApi } from '@/api'
+import { getWebSocketService } from '@/services/websocket'
 
 interface ChatState {
   contacts: User[]
@@ -24,25 +25,25 @@ export const useChatStore = defineStore('chat', {
 
   getters: {
     // 获取当前用户
-    currentUser: (state): User | null => {
+    currentUser: (state: ChatState): User | null => {
       const authStore = useAuthStore()
       return authStore.userInfo
     },
 
     // 获取活动会话
-    activeConversation: (state): Conversation | null => {
+    activeConversation: (state: ChatState): Conversation | null => {
       if (!state.activeConversationId) return null
       return state.conversations.find((conv: Conversation) => conv.id === state.activeConversationId) || null
     },
 
     // 获取活动会话的消息
-    activeMessages: (state): Message[] => {
+    activeMessages: (state: ChatState): Message[] => {
       if (!state.activeConversationId) return []
       return state.messages[state.activeConversationId] || []
     },
 
     // 根据ID获取联系人（支持number和string类型的ID）
-    getContactById: (state) => {
+    getContactById: (state: ChatState) => {
       return (id: string | number) => {
         const idStr = id.toString()
         return state.contacts.find((contact: User) => contact.id.toString() === idStr)
@@ -50,7 +51,7 @@ export const useChatStore = defineStore('chat', {
     },
 
     // 获取会话对应的联系人
-    getConversationContact: (state) => {
+    getConversationContact: (state: ChatState) => {
       return (conversation: Conversation) => {
         const authStore = useAuthStore()
         const currentUserId = authStore.userInfo?.id
@@ -61,7 +62,7 @@ export const useChatStore = defineStore('chat', {
     },
 
     // 获取可以聊天的联系人（排除当前用户）
-    availableContacts: (state): User[] => {
+    availableContacts: (state: ChatState): User[] => {
       const authStore = useAuthStore()
       const currentUserId = authStore.userInfo?.id
 
@@ -70,13 +71,13 @@ export const useChatStore = defineStore('chat', {
         return []
       }
 
-      const filtered = state.contacts.filter((contact: User极速版) => contact.id.toString() !== currentUserId.toString())
+      const filtered = state.contacts.filter((contact: User) => contact.id.toString() !== currentUserId.toString())
       console.log('可用联系人数量:', filtered.length)
       return filtered
     },
 
     // 获取当前用户的会话列表（按时间排序）
-    sortedConversations: (state): Conversation[] => {
+    sortedConversations: (state: ChatState): Conversation[] => {
       const authStore = useAuthStore()
       const currentUserId = authStore.userInfo?.id
       if (!currentUserId) return []
@@ -150,7 +151,7 @@ export const useChatStore = defineStore('chat', {
               participantIds: ['1', '3'],
               unreadCount: 0,
               timestamp: new Date(Date.now() - 3600000),
-              type极速版: 'private'
+              type: 'private'
             }
           ],
           messages: {
@@ -165,7 +166,7 @@ export const useChatStore = defineStore('chat', {
                 status: 'read'
               }
             ],
-            'conv_1极速版_3': [
+            'conv_1_3': [
               {
                 id: 'msg2',
                 senderId: '3',
@@ -257,7 +258,7 @@ export const useChatStore = defineStore('chat', {
           conversations: [
             {
               id: 'conv_4_1',
-              participantIds: ['极速版4', '1'],
+              participantIds: ['4', '1'],
               unreadCount: 0,
               timestamp: new Date(Date.now() - 900000),
               type: 'private'
@@ -280,7 +281,7 @@ export const useChatStore = defineStore('chat', {
           messages: {
             'conv_4_1': [
               {
-                id极速版: 'msg7',
+                id: 'msg7',
                 senderId: '4',
                 receiverId: '1',
                 content: '张三，请查看新的项目文档',
@@ -404,7 +405,7 @@ export const useChatStore = defineStore('chat', {
       const receiverId = conversation.participantIds.find((id: string) => id !== currentUser.id.toString()) || ''
 
       const message: Message = {
-        id: `msg_${Date.now()}`,
+        id: Date.now(),
         senderId: currentUser.id.toString(),
         receiverId,
         content,
@@ -435,7 +436,7 @@ export const useChatStore = defineStore('chat', {
 
     // 设置正在输入状态
     setTyping(conversationId: string, isTyping: boolean) {
-      ; (this as any).isTyping[conversation极速版Id] = isTyping
+      ; (this as any).isTyping[conversationId] = isTyping
     },
 
     // 清空数据（用户退出登录时）
@@ -445,6 +446,240 @@ export const useChatStore = defineStore('chat', {
         ; (this as any).messages = {}
         ; (this as any).activeConversationId = null
         ; (this as any).isTyping = {}
+    },
+
+    // ==================== WebSocket 相关方法 ====================
+
+    // 初始化WebSocket连接
+    async initWebSocket() {
+      try {
+        const authStore = useAuthStore()
+        if (!authStore.isLoggedIn || !authStore.currentUser?.token) {
+          console.warn('用户未登录，跳过WebSocket初始化')
+          return
+        }
+
+        const wsService = getWebSocketService()
+        if (!wsService.isConnected) {
+          await wsService.connect()
+          console.log('WebSocket连接初始化成功')
+        }
+
+        // 注册消息监听器
+        wsService.onMessage(this.handleWebSocketMessage.bind(this))
+      } catch (error) {
+        console.error('WebSocket连接初始化失败:', error)
+      }
+    },
+
+    // 发送WebSocket消息
+    sendWebSocketMessage(content: string) {
+      const authStore = useAuthStore()
+      const currentUser = authStore.userInfo
+      if (!(this as any).activeConversationId || !currentUser) return
+
+      const conversation = (this as any).activeConversation
+      if (!conversation) return
+
+      const receiverId = conversation.participantIds.find((id: string) => id !== currentUser.id.toString())
+      if (!receiverId) return
+
+      // 通过WebSocket发送消息
+      const wsService = getWebSocketService()
+      wsService.sendPrivateMessage(parseInt(receiverId), content)
+
+      // 创建本地消息对象（乐观更新）
+      const message: Message = {
+        id: Date.now(), // 临时ID，服务器会返回真实ID
+        senderId: currentUser.id,
+        receiverId: parseInt(receiverId),
+        content,
+        messageType: 'text',
+        status: 'sending',
+        createTime: new Date().toISOString(),
+        updateTime: new Date().toISOString(),
+        isRecalled: false
+      }
+
+      // 添加到本地消息列表
+      if (!(this as any).messages[(this as any).activeConversationId]) {
+        ; (this as any).messages[(this as any).activeConversationId] = []
+      }
+      ; (this as any).messages[(this as any).activeConversationId].push(message)
+
+      // 更新会话时间戳
+      conversation.timestamp = new Date()
+      conversation.lastMessage = message
+    },
+
+    // 添加接收到的消息
+    addMessage(message: Message) {
+      const authStore = useAuthStore()
+      const currentUserId = authStore.userInfo?.id
+      if (!currentUserId) return
+
+      // 确保ID类型一致（后端返回数字，前端使用字符串）
+      const senderIdStr = message.senderId.toString()
+      const receiverIdStr = message.receiverId.toString()
+      const currentUserIdStr = currentUserId.toString()
+
+      // 确定会话ID
+      let conversationId: string | null = null
+      
+      // 查找现有会话
+      const existingConv = (this as any).conversations.find((conv: Conversation) => {
+        return conv.participantIds.includes(senderIdStr) &&
+               conv.participantIds.includes(receiverIdStr)
+      })
+
+      if (existingConv) {
+        conversationId = existingConv.id
+      } else {
+        // 创建新会话
+        const newConversation: Conversation = {
+          id: `conv_${senderIdStr}_${receiverIdStr}_${Date.now()}`,
+          participantIds: [senderIdStr, receiverIdStr],
+          unreadCount: senderIdStr !== currentUserIdStr ? 1 : 0,
+          timestamp: new Date(message.createTime),
+          type: 'private'
+        }
+        ; (this as any).conversations.unshift(newConversation)
+        conversationId = newConversation.id
+      }
+
+      // 添加消息到对应会话
+      if (conversationId) {
+        if (!(this as any).messages[conversationId]) {
+          ; (this as any).messages[conversationId] = []
+        }
+        ; (this as any).messages[conversationId].push(message)
+
+        // 更新会话信息
+        const conversation = (this as any).conversations.find((conv: Conversation) => conv.id === conversationId)
+        if (conversation) {
+          conversation.lastMessage = message
+          conversation.timestamp = new Date(message.createTime)
+          
+          // 如果不是当前活跃会话且不是自己发送的消息，增加未读数
+          if (conversationId !== (this as any).activeConversationId && senderIdStr !== currentUserIdStr) {
+            conversation.unreadCount++
+          }
+        }
+      }
+    },
+
+    // 标记消息为已读
+    markMessageAsRead(messageId: number) {
+      Object.values((this as any).messages).forEach((messageList: any) => {
+        const messages = messageList as Message[]
+        const message = messages.find((msg: Message) => msg.id === messageId)
+        if (message) {
+          message.status = 'read'
+          message.readTime = new Date().toISOString()
+        }
+      })
+    },
+
+    // 更新在线用户列表
+    updateOnlineUsers(userIds: number[]) {
+      ; (this as any).contacts.forEach((contact: User) => {
+        contact.status = userIds.includes(contact.id) ? 1 : 0
+      })
+    },
+
+    // 发送输入指示器
+    sendTypingIndicator(isTyping: boolean) {
+      try {
+        const authStore = useAuthStore()
+        const currentUser = authStore.userInfo
+        if (!(this as any).activeConversationId || !currentUser) return
+
+        const conversation = (this as any).activeConversation
+        if (!conversation) return
+
+        const receiverId = conversation.participantIds.find((id: string) => id !== currentUser.id.toString())
+        if (!receiverId) return
+
+        const wsService = getWebSocketService()
+        if (wsService.isConnected) {
+          wsService.sendTypingIndicator(parseInt(receiverId), isTyping)
+        } else {
+          console.warn('WebSocket未连接，无法发送输入指示器')
+        }
+      } catch (error) {
+        console.error('发送输入指示器失败:', error)
+      }
+    },
+
+
+
+    // 处理WebSocket接收到的消息
+    handleWebSocketMessage(messageData: any) {
+      if (!messageData.type) return
+
+      switch (messageData.type) {
+        case 'private':
+          this.handleWebSocketPrivateMessage(messageData)
+          break
+        case 'group':
+          // TODO: 处理群聊消息
+          console.log('收到群聊消息:', messageData)
+          break
+        case 'typing':
+          // TODO: 处理输入指示器
+          console.log('收到输入指示器:', messageData)
+          break
+        case 'read_receipt':
+          // TODO: 处理已读回执
+          console.log('收到已读回执:', messageData)
+          break
+        case 'online_users':
+          this.updateOnlineUsers(messageData.userIds)
+          break
+        case 'heartbeat':
+          // 心跳消息，无需处理
+          break
+        default:
+          console.warn('未知的WebSocket消息类型:', messageData.type)
+      }
+    },
+
+    // 处理WebSocket接收到的私聊消息
+    handleWebSocketPrivateMessage(messageData: any) {
+      console.log('收到WebSocket私聊消息:', messageData)
+      
+      // 处理嵌套的消息格式，支持两种格式：
+      // 1. 直接格式: { content: "消息内容", fromUserId: 1, toUserId: 2 }
+      // 2. 嵌套格式: { message: { content: "消息内容", fromUserId: 1, toUserId: 2 } }
+      const message = messageData.message || messageData
+      
+      const chatMessage: Message = {
+        id: message.id || messageData.id || Date.now(),
+        senderId: message.fromUserId || message.senderId || messageData.fromUserId,
+        receiverId: message.toUserId || message.receiverId || messageData.toUserId,
+        content: message.content || messageData.content,
+        messageType: this.convertMessageType(message.messageType || messageData.messageType || 1),
+        status: 'delivered',
+        createTime: message.createTime || messageData.createTime || new Date().toISOString(),
+        updateTime: message.updateTime || messageData.updateTime || new Date().toISOString(),
+        isRecalled: false
+      }
+
+      console.log('转换后的消息:', chatMessage)
+      
+      // 添加到聊天store
+      this.addMessage(chatMessage)
+    },
+
+    // 转换消息类型辅助方法
+    convertMessageType(type: number): 'text' | 'image' | 'file' | 'system' {
+      switch (type) {
+        case 1: return 'text'
+        case 2: return 'image'
+        case 3: return 'file'
+        case 6: return 'system'
+        default: return 'text'
+      }
     }
   }
 })

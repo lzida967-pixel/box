@@ -1,6 +1,7 @@
 import { defineStore } from 'pinia'
 import { ElMessage } from 'element-plus'
 import { authApi } from '@/api'
+import { getWebSocketService, destroyWebSocketService } from '@/services/websocket'
 import type {
   AuthUser,
   LoginCredentials,
@@ -168,6 +169,14 @@ export const useAuthStore = defineStore('auth', {
         // 保存到本地存储
         localStorage.setItem('authUser', JSON.stringify(authUser))
 
+        // 初始化WebSocket连接
+        try {
+          const wsService = getWebSocketService()
+          wsService.connect()
+        } catch (error) {
+          console.warn('WebSocket初始化失败:', error)
+        }
+
         ElMessage.success('登录成功')
         return true
       } catch (error: any) {
@@ -229,6 +238,13 @@ export const useAuthStore = defineStore('auth', {
 
     // 退出登录
     logout() {
+      // 清理WebSocket连接
+      try {
+        destroyWebSocketService()
+      } catch (error) {
+        console.warn('WebSocket清理失败:', error)
+      }
+
       this.currentUser = null
       this.isLoggedIn = false
       this.error = null
