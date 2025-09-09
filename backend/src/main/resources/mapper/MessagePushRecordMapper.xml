@@ -1,0 +1,85 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.chatapp.mapper.MessagePushRecordMapper">
+
+    <insert id="insert" parameterType="map" useGeneratedKeys="true" keyProperty="id">
+        INSERT INTO message_push_records (
+            message_id, user_id, push_status, push_time, retry_count, 
+            error_message, create_time, update_time
+        ) VALUES (
+            #{message_id}, #{user_id}, #{push_status}, #{push_time}, #{retry_count},
+            #{error_message}, #{create_time}, #{update_time}
+        )
+    </insert>
+
+    <select id="findUnpushedMessages" resultType="com.chatapp.entity.Message">
+        SELECT m.* FROM messages m
+        INNER JOIN message_push_records mpr ON m.id = mpr.message_id
+        WHERE mpr.user_id = #{userId} 
+        AND mpr.push_status = 0
+        AND m.deleted = 0
+        AND m.id IS NOT NULL
+        ORDER BY m.send_time ASC
+        LIMIT 100
+    </select>
+
+    <update id="markMessagesAsPushed">
+        UPDATE message_push_records 
+        SET push_status = 1, 
+            push_time = NOW(), 
+            update_time = NOW()
+        WHERE user_id = #{userId} 
+        AND message_id IN
+        <foreach collection="messageIds" item="messageId" open="(" separator="," close=")">
+            #{messageId}
+        </foreach>
+        AND push_status = 0
+    </update>
+
+    <update id="updatePushStatus">
+        UPDATE message_push_records 
+        SET push_status = #{status},
+            <if test="status == 1">push_time = NOW(),</if>
+            <if test="errorMessage != null">error_message = #{errorMessage},</if>
+            update_time = NOW()
+        WHERE message_id = #{messageId} 
+        AND user_id = #{userId}
+    </update>
+
+    <update id="incrementRetryCount">
+        UPDATE message_push_records 
+        SET retry_count = retry_count + 1,
+            push_status = 2,
+            error_message = #{errorMessage},
+            update_time = NOW()
+        WHERE message_id = #{messageId} 
+        AND user_id = #{userId}
+    </update>
+
+    <select id="findFailedPushRecords" resultType="map">
+        SELECT message_id, user_id, retry_count, error_message, create_time
+        FROM message_push_records 
+        WHERE push_status = 2 
+        AND retry_count &lt; #{maxRetryCount}
+        AND create_time > DATE_SUB(NOW(), INTERVAL 24 HOUR)
+        ORDER BY create_time ASC
+        LIMIT 100
+    </select>
+
+    <delete id="deletePushedRecordsBefore">
+        DELETE FROM message_push_records 
+        WHERE push_status = 1 
+        AND push_time &lt; #{cutoffTime}
+    </delete>
+
+    <select id="findByMessageIdAndUserId" resultType="map">
+        SELECT * FROM message_push_records 
+        WHERE message_id = #{messageId} 
+        AND user_id = #{userId}
+    </select>
+
+    <delete id="deleteById">
+        DELETE FROM message_push_records WHERE id = #{id}
+    </delete>
+
+</mapper>

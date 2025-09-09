@@ -94,17 +94,21 @@ export interface UserAccount {
 // 消息（与后端Message实体对应）
 export interface Message {
   id: number
-  senderId: number
-  receiverId: number
+  fromUserId: number  // 发送者ID（与后端保持一致）
+  toUserId: number    // 接收者ID（与后端保持一致）
   groupId?: number
   content: string
-  messageType: 'text' | 'image' | 'file' | 'system'
-  status: 'sending' | 'sent' | 'delivered' | 'read' | 'recalled'
+  messageType: number | 'text' | 'image' | 'file' | 'system'  // 支持数字和字符串类型
+  status: number | 'sending' | 'sent' | 'delivered' | 'read' | 'recalled'  // 支持数字和字符串类型
+  sendTime: string    // 发送时间（与后端保持一致）
   createTime: string
   updateTime: string
-  isRecalled: boolean
-  recallTime?: string
   readTime?: string
+  // 兼容字段（用于向后兼容）
+  senderId?: number   // 映射到fromUserId
+  receiverId?: number // 映射到toUserId
+  isRecalled?: boolean
+  recallTime?: string
 }
 
 // 会话

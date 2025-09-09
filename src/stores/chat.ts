@@ -1,7 +1,7 @@
 import { defineStore } from 'pinia'
 import type { User, Message, Conversation } from '@/types'
 import { useAuthStore } from './auth'
-import { contactApi } from '@/api'
+import { contactApi, chatApi } from '@/api'
 import { getWebSocketService } from '@/services/websocket'
 
 interface ChatState {
@@ -128,6 +128,14 @@ export const useChatStore = defineStore('chat', {
 
       // 加载联系人数据
       await this.loadContacts()
+
+      // 加载离线消息（添加错误处理，避免阻塞初始化）
+      try {
+        await this.loadOfflineMessages()
+      } catch (error) {
+        console.warn('初始化时加载离线消息失败，将在后台重试:', error)
+        // 不阻塞初始化流程，让WebSocket服务稍后重试
+      }
 
       // 加载该用户的会话数据（模拟从服务器获取）
       this.loadUserConversations(userId)
@@ -376,7 +384,7 @@ export const useChatStore = defineStore('chat', {
     },
 
     // 设置活动对话
-    setActiveConversation(conversationId: string) {
+    async setActiveConversation(conversationId: string) {
       console.log('设置活动对话ID:', conversationId)
 
       const conversation = (this as any).conversations.find((conv: Conversation) => conv.id === conversationId)
@@ -388,6 +396,9 @@ export const useChatStore = defineStore('chat', {
 
       ; (this as any).activeConversationId = conversationId
       conversation.unreadCount = 0
+
+      // 加载历史消息
+      await this.loadChatHistory(conversationId)
 
       console.log('活动对话设置成功:', conversationId)
       console.log('对话参与者:', conversation.participantIds)
@@ -406,12 +417,14 @@ export const useChatStore = defineStore('chat', {
 
       const message: Message = {
         id: Date.now(),
-        senderId: currentUser.id.toString(),
-        receiverId,
+        senderId: currentUser.id,
+        receiverId: parseInt(receiverId),
         content,
-        timestamp: new Date(),
-        type: 'text',
-        status: 'sending'
+        messageType: 'text',
+        status: 'sending',
+        createTime: new Date().toISOString(),
+        updateTime: new Date().toISOString(),
+        isRecalled: false
       }
 
       if (!(this as any).messages[(this as any).activeConversationId]) {
@@ -518,9 +531,18 @@ export const useChatStore = defineStore('chat', {
       const currentUserId = authStore.userInfo?.id
       if (!currentUserId) return
 
+      // 使用正确的字段名（兼容旧字段名）
+      const senderId = message.fromUserId || message.senderId
+      const receiverId = message.toUserId || message.receiverId
+      
+      if (!senderId || !receiverId) {
+        console.warn('消息缺少发送者或接收者ID:', message)
+        return
+      }
+
       // 确保ID类型一致（后端返回数字，前端使用字符串）
-      const senderIdStr = message.senderId.toString()
-      const receiverIdStr = message.receiverId.toString()
+      const senderIdStr = senderId.toString()
+      const receiverIdStr = receiverId.toString()
       const currentUserIdStr = currentUserId.toString()
 
       // 确定会话ID
@@ -655,13 +677,17 @@ export const useChatStore = defineStore('chat', {
       
       const chatMessage: Message = {
         id: message.id || messageData.id || Date.now(),
-        senderId: message.fromUserId || message.senderId || messageData.fromUserId,
-        receiverId: message.toUserId || message.receiverId || messageData.toUserId,
+        fromUserId: message.fromUserId || message.senderId || messageData.fromUserId,
+        toUserId: message.toUserId || message.receiverId || messageData.toUserId,
         content: message.content || messageData.content,
         messageType: this.convertMessageType(message.messageType || messageData.messageType || 1),
         status: 'delivered',
+        sendTime: message.sendTime || messageData.sendTime || new Date().toISOString(),
         createTime: message.createTime || messageData.createTime || new Date().toISOString(),
         updateTime: message.updateTime || messageData.updateTime || new Date().toISOString(),
+        // 兼容字段
+        senderId: message.fromUserId || message.senderId || messageData.fromUserId,
+        receiverId: message.toUserId || message.receiverId || messageData.toUserId,
         isRecalled: false
       }
 
@@ -679,6 +705,115 @@ export const useChatStore = defineStore('chat', {
         case 3: return 'file'
         case 6: return 'system'
         default: return 'text'
+      }
+    },
+
+    // 加载聊天历史记录
+    async loadChatHistory(conversationId: string) {
+      try {
+        const authStore = useAuthStore()
+        const currentUserId = authStore.userInfo?.id
+        if (!currentUserId) return
+
+        // 从会话ID中提取好友ID
+        const conversation = (this as any).conversations.find((conv: Conversation) => conv.id === conversationId)
+        if (!conversation) return
+
+        const friendId = conversation.participantIds.find((id: string) => id !== currentUserId.toString())
+        if (!friendId) return
+
+        console.log('加载聊天历史:', { conversationId, friendId })
+
+        // 调用API获取聊天历史
+        const response = await chatApi.getChatHistory(parseInt(friendId))
+        
+        if (response.code === 200 && response.data?.messages) {
+          const messages = response.data.messages.map((msg: any) => ({
+            id: msg.id,
+            senderId: msg.fromUserId,
+            receiverId: msg.toUserId,
+            content: msg.content,
+            messageType: this.convertMessageType(msg.messageType || 1),
+            status: this.convertMessageStatus(msg.status),
+            createTime: msg.createTime || msg.sendTime,
+            updateTime: msg.updateTime,
+            isRecalled: msg.status === 2
+          }))
+
+          // 按时间排序（旧消息在前）
+          messages.sort((a: Message, b: Message) => 
+            new Date(a.createTime).getTime() - new Date(b.createTime).getTime()
+          )
+
+          // 替换当前会话的消息列表
+          ; (this as any).messages[conversationId] = messages
+
+          console.log('聊天历史加载成功:', messages.length, '条消息')
+        }
+      } catch (error) {
+        console.error('加载聊天历史失败:', error)
+      }
+    },
+
+    // 转换消息状态
+    convertMessageStatus(status: number): 'sending' | 'sent' | 'delivered' | 'read' {
+      switch (status) {
+        case 0: return 'delivered' // 未读
+        case 1: return 'read'      // 已读
+        case 2: return 'sent'      // 已撤回，显示为已发送
+        default: return 'sent'
+      }
+    },
+
+    // 加载离线消息
+    async loadOfflineMessages() {
+      try {
+        const response = await chatApi.getOfflineMessages()
+        
+        if (response.code === 200 && response.data) {
+          const offlineMessages = response.data
+          console.log('收到离线消息:', offlineMessages.length, '条')
+
+          // 处理每条离线消息
+          for (const msg of offlineMessages) {
+            const message: Message = {
+              id: msg.id,
+              senderId: msg.fromUserId,
+              receiverId: msg.toUserId,
+              content: msg.content,
+              messageType: this.convertMessageType(msg.messageType || 1),
+              status: 'delivered',
+              createTime: msg.createTime || msg.sendTime,
+              updateTime: msg.updateTime,
+              isRecalled: false
+            }
+
+            this.addMessage(message)
+          }
+
+          // 标记离线消息为已读
+          if (offlineMessages.length > 0) {
+            const messageIds = offlineMessages.map((msg: any) => msg.id)
+            try {
+              await chatApi.markOfflineMessagesAsRead(messageIds)
+            } catch (markError) {
+              console.warn('标记离线消息为已读失败:', markError)
+              // 标记失败不影响消息显示
+            }
+          }
+        }
+      } catch (error) {
+        console.error('加载离线消息失败:', error)
+        // 检查是否是网络错误或服务器错误
+        if (error.response?.status === 500) {
+          console.warn('服务器内部错误，可能是后端服务配置问题')
+        } else if (error.response?.status === 401) {
+          console.warn('认证失败，可能需要重新登录')
+        } else if (!error.response) {
+          console.warn('网络连接错误，请检查网络连接')
+        }
+        // 抛出错误让上层处理
+        throw error
       }
     }
   }

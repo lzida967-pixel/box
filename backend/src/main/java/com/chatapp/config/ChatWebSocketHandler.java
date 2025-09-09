@@ -2,6 +2,7 @@ package com.chatapp.config;
 
 import com.chatapp.entity.Message;
 import com.chatapp.service.MessageService;
+import com.chatapp.service.OfflineMessageService;
 import com.chatapp.service.WebSocketSessionService;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import org.slf4j.Logger;
@@ -35,6 +36,9 @@ public class ChatWebSocketHandler extends TextWebSocketHandler {
     @Autowired
     private WebSocketSessionService sessionService;
 
+    @Autowired
+    private OfflineMessageService offlineMessageService;
+
     @Override
     public void afterConnectionEstablished(WebSocketSession session) throws Exception {
         Long userId = (Long) session.getAttributes().get("userId");
@@ -50,6 +54,9 @@ public class ChatWebSocketHandler extends TextWebSocketHandler {
             welcomeMessage.put("timestamp", System.currentTimeMillis());
             
             sendToSession(session, welcomeMessage);
+            
+            // 处理用户上线，推送离线消息
+            offlineMessageService.handleUserOnline(userId);
             
             logger.info("用户 {} 建立WebSocket连接成功", userId);
         } else {
@@ -125,10 +132,8 @@ public class ChatWebSocketHandler extends TextWebSocketHandler {
             // 发送给发送者（确认送达）
             sessionService.sendToUser(fromUserId, response);
 
-            // 发送给接收者（如果在线）
-            if (sessionService.isUserOnline(toUserId)) {
-                sessionService.sendToUser(toUserId, response);
-            }
+            // 使用离线消息服务推送给接收者（支持离线推送）
+            offlineMessageService.pushMessageToUser(toUserId, message);
 
             logger.debug("私聊消息发送成功: {} -> {}", fromUserId, toUserId);
         } catch (Exception e) {

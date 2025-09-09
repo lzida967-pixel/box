@@ -37,6 +37,7 @@ declare module 'vue' {
     FriendsPage: typeof import('./src/components/FriendsPage.vue')['default']
     MessageInput: typeof import('./src/components/MessageInput.vue')['default']
     MessageList: typeof import('./src/components/MessageList.vue')['default']
+    OfflineMessageTest: typeof import('./src/components/OfflineMessageTest.vue')['default']
     RouterLink: typeof import('vue-router')['RouterLink']
     RouterView: typeof import('vue-router')['RouterView']
     SettingsDialog: typeof import('./src/components/SettingsDialog.vue')['default']

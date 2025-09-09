@@ -49,7 +49,7 @@
                   </el-icon>
                 </div>
               </div>
-              <div class="message-time">{{ formatMessageTime(message.timestamp) }}</div>
+              <div class="message-time">{{ formatMessageTime(message.sendTime || message.createTime || message.timestamp) }}</div>
             </div>
 
             <!-- 自己头像 -->
@@ -159,7 +159,15 @@ const canSend = computed(() => {
 
 // 方法
 const isOwnMessage = (message: Message) => {
-  return message.senderId === authStore.userInfo?.id
+  const currentUserId = authStore.userInfo?.id
+  if (!currentUserId) return false
+  
+  // 使用正确的字段名：fromUserId（兼容senderId）
+  const messageSenderId = message.fromUserId || message.senderId
+  if (!messageSenderId) return false
+  
+  // 确保类型匹配：将两个ID都转换为字符串进行比较
+  return messageSenderId.toString() === currentUserId.toString()
 }
 
 const getSenderAvatar = (message: Message) => {
@@ -171,7 +179,7 @@ const getBubbleClass = (message: Message) => {
   return isOwnMessage(message) ? 'own-bubble' : 'other-bubble'
 }
 
-const formatMessageTime = (timestamp: Date) => {
+const formatMessageTime = (timestamp: Date | string) => {
   return dayjs(timestamp).format('HH:mm')
 }
 

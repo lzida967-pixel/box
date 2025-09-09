@@ -177,6 +177,32 @@ export const chatApi = {
   },
 
   /**
+   * 获取聊天历史记录（新增）
+   */
+  getChatHistory: (friendId: number, limit = 50, offset = 0): Promise<ApiResponse<any>> => {
+    return api.get(`/messages/chat-history/${friendId}`, {
+      params: {
+        limit,
+        offset
+      }
+    })
+  },
+
+  /**
+   * 获取离线消息（新增）
+   */
+  getOfflineMessages: (): Promise<ApiResponse<any[]>> => {
+    return api.get('/messages/offline')
+  },
+
+  /**
+   * 标记离线消息为已读（新增）
+   */
+  markOfflineMessagesAsRead: (messageIds: number[]): Promise<ApiResponse<void>> => {
+    return api.put('/messages/offline/mark-read', { messageIds })
+  },
+
+  /**
    * 发送消息
    */
   sendMessage: (message: any): Promise<ApiResponse<any>> => {

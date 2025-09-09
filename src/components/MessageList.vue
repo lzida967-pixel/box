@@ -37,7 +37,7 @@
             </div>
             
             <!-- 消息时间 -->
-            <div class="message-time">{{ formatMessageTime(message.timestamp) }}</div>
+            <div class="message-time">{{ formatMessageTime(message.sendTime || message.createTime) }}</div>
           </div>
 
           <!-- 自己的头像 -->
@@ -80,11 +80,21 @@ const showTypingIndicator = computed(() => {
 })
 
 const isOwnMessage = (message: Message) => {
-  return message.senderId === chatStore.currentUser?.id
+  const currentUserId = chatStore.currentUser?.id
+  if (!currentUserId) return false
+  
+  // 使用正确的字段名：fromUserId（兼容senderId）
+  const messageSenderId = message.fromUserId || message.senderId
+  if (!messageSenderId) return false
+  
+  // 确保类型匹配：将两个ID都转换为字符串进行比较
+  return messageSenderId.toString() === currentUserId.toString()
 }
 
 const getSenderAvatar = (message: Message) => {
-  const sender = chatStore.getContactById(message.senderId)
+  // 使用正确的字段名：fromUserId（兼容senderId）
+  const senderId = message.fromUserId || message.senderId
+  const sender = chatStore.getContactById(senderId)
   return sender?.avatar || 'https://avatars.githubusercontent.com/u/0?v=4'
 }
 
@@ -92,8 +102,8 @@ const getBubbleClass = (message: Message) => {
   return isOwnMessage(message) ? 'own-bubble' : 'other-bubble'
 }
 
-const formatMessageTime = (timestamp: Date) => {
-  return dayjs(timestamp).format('HH:mm')
+const formatMessageTime = (createTime: string) => {
+  return dayjs(createTime).format('HH:mm')
 }
 
 const scrollToBottom = () => {

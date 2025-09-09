@@ -209,7 +209,15 @@ const sendTestMessage = () => {
 }
 
 const isOwnMessage = (message: Message) => {
-  return message.senderId === authStore.userInfo?.id
+  const currentUserId = authStore.userInfo?.id
+  if (!currentUserId) return false
+  
+  // 使用正确的字段名：fromUserId（兼容senderId）
+  const messageSenderId = message.fromUserId || message.senderId
+  if (!messageSenderId) return false
+  
+  // 确保类型匹配：将两个ID都转换为字符串进行比较
+  return messageSenderId.toString() === currentUserId.toString()
 }
 
 const formatTime = (timestamp: string | Date) => {

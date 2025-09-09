@@ -270,7 +270,10 @@ apiClient.interceptors.response.use(
       errorMessage = error.message || '请求失败'
     }
 
-    ElMessage.error(errorMessage)
+    // 对于离线消息相关的API，不显示错误提示，让调用方处理
+    if (!error.config?.url?.includes('/messages/offline')) {
+      ElMessage.error(errorMessage)
+    }
     return Promise.reject(error)
   }
 )

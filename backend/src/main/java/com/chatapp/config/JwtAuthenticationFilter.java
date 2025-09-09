@@ -4,6 +4,7 @@ import com.chatapp.service.JwtTokenService;
 import jakarta.servlet.FilterChain;
 import jakarta.servlet.ServletException;
 import jakarta.servlet.http.HttpServletRequest;
+import jakarta.servlet.http.HttpServletRequestWrapper;
 import jakarta.servlet.http.HttpServletResponse;
 import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
 import org.springframework.security.core.context.SecurityContextHolder;
@@ -13,6 +14,7 @@ import org.springframework.security.web.authentication.WebAuthenticationDetailsS
 import org.springframework.web.filter.OncePerRequestFilter;
 
 import java.io.IOException;
+import java.util.*;
 
 /**
  * JWT认证过滤器
@@ -59,6 +61,21 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
                         authentication.setDetails(new WebAuthenticationDetailsSource().buildDetails(request));
 
                         SecurityContextHolder.getContext().setAuthentication(authentication);
+                        
+                        // 从token中提取用户ID并设置到请求头
+                        try {
+                            Long userId = jwtTokenService.getUserIdFromToken(token);
+                            if (userId != null) {
+                                // 创建包装器来添加请求头
+                                RequestWrapper requestWrapper = new RequestWrapper(request);
+                                requestWrapper.addHeader("X-User-Id", userId.toString());
+                                request = requestWrapper;
+                                System.out.println("JWT过滤器 - 设置用户ID: " + userId);
+                            }
+                        } catch (Exception e) {
+                            System.err.println("JWT过滤器 - 提取用户ID失败: " + e.getMessage());
+                        }
+                        
                         System.out.println("JWT过滤器 - 认证成功，用户: " + username);
                     }
                 } else {
@@ -73,5 +90,49 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
         }
 
         filterChain.doFilter(request, response);
+    }
+
+    /**
+     * 包装HttpServletRequest以添加X-User-Id请求头
+     */
+    private static class RequestWrapper extends HttpServletRequestWrapper {
+        private final Map<String, String> customHeaders;
+
+        public RequestWrapper(HttpServletRequest request) {
+            super(request);
+            this.customHeaders = new HashMap<>();
+        }
+
+        public void addHeader(String name, String value) {
+            this.customHeaders.put(name, value);
+        }
+
+        @Override
+        public String getHeader(String name) {
+            String headerValue = customHeaders.get(name);
+            if (headerValue != null) {
+                return headerValue;
+            }
+            return super.getHeader(name);
+        }
+
+        @Override
+        public Enumeration<String> getHeaderNames() {
+            Set<String> set = new HashSet<>(customHeaders.keySet());
+            Enumeration<String> e = super.getHeaderNames();
+            while (e.hasMoreElements()) {
+                set.add(e.nextElement());
+            }
+            return Collections.enumeration(set);
+        }
+
+        @Override
+        public Enumeration<String> getHeaders(String name) {
+            String headerValue = customHeaders.get(name);
+            if (headerValue != null) {
+                return Collections.enumeration(Arrays.asList(headerValue));
+            }
+            return super.getHeaders(name);
+        }
     }
 }

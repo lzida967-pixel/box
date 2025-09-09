@@ -99,6 +99,11 @@ export class WebSocketService {
     
     // 发送队列中的消息
     this.flushMessageQueue()
+    
+    // 连接建立后延迟获取离线消息，避免阻塞连接
+    setTimeout(() => {
+      this.loadOfflineMessages()
+    }, 1000)
   }
 
   /**
@@ -391,6 +396,21 @@ export class WebSocketService {
   }
 
   /**
+   * 获取离线消息
+   */
+  private async loadOfflineMessages(): Promise<void> {
+    try {
+      const chatStore = useChatStore()
+      await chatStore.loadOfflineMessages()
+      console.log('离线消息加载成功')
+    } catch (error) {
+      console.error('获取离线消息失败:', error)
+      // 现在后端已经有了更好的错误处理，不需要前端重试
+      console.warn('离线消息加载失败，但不影响正常聊天功能')
+    }
+  }
+
+  /**
    * 断开连接
    */
   disconnect(): void {
@@ -406,6 +426,14 @@ export class WebSocketService {
    */
   get isConnected(): boolean {
     return this.ws !== null && this.ws.readyState === WebSocket.OPEN
+  }
+
+  /**
+   * 手动重新加载离线消息
+   */
+  async retryLoadOfflineMessages(): Promise<void> {
+    console.log('手动重试加载离线消息')
+    await this.loadOfflineMessages()
   }
 
   /**
