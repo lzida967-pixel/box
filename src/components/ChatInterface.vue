@@ -3,7 +3,7 @@
     <!-- 聊天头部 -->
     <div class="chat-header">
       <div class="contact-info">
-        <el-avatar :src="currentContact?.avatar" :size="40" />
+        <el-avatar :src="getContactAvatar(currentContact)" :size="40" />
         <div class="contact-details">
           <div class="contact-name">{{ getContactDisplayName(currentContact) }}</div>
           <div class="contact-status">{{ getContactStatusText(currentContact?.status) }}</div>
@@ -54,7 +54,7 @@
 
             <!-- 自己头像 -->
             <div v-if="isOwnMessage(message)" class="message-avatar">
-              <el-avatar :src="authStore.userInfo?.avatar" :size="36" />
+              <el-avatar :src="getOwnAvatar()" :size="36" />
             </div>
           </div>
         </div>
@@ -171,8 +171,50 @@ const isOwnMessage = (message: Message) => {
 }
 
 const getSenderAvatar = (message: Message) => {
+  console.log('获取头像 - 消息senderId:', message.senderId, '消息内容:', message.content)
   const sender = chatStore.getContactById(message.senderId)
-  return sender?.avatar || 'https://avatars.githubusercontent.com/u/0?v=4'
+  
+  // 如果sender存在且有avatar字段，检查是否是标识符格式
+  let avatarUrl = 'https://avatars.githubusercontent.com/u/0?v=4' // 默认头像
+  
+  if (sender?.avatar) {
+    // 如果avatar是标识符格式（如avatar_15），则构建完整URL
+    if (sender.avatar.startsWith('avatar_')) {
+      avatarUrl = `http://localhost:8080/api/user/avatar/${sender.id}`
+    } else if (sender.avatar.startsWith('/api/user/avatar/')) {
+      // 如果已经是相对路径，转换为完整URL
+      avatarUrl = `http://localhost:8080${sender.avatar}`
+    } else {
+      // 否则直接使用avatar字段
+      avatarUrl = sender.avatar
+    }
+  }
+  
+  console.log('头像URL:', avatarUrl, '发送者信息:', sender ? {
+    id: sender.id,
+    name: sender.nickname || sender.username,
+    hasAvatar: !!sender.avatar
+  } : '发送者不存在')
+  return avatarUrl
+}
+
+const getContactAvatar = (contact: User | null) => {
+  if (!contact?.avatar) return 'https://avatars.githubusercontent.com/u/0?v=4'
+  
+  // 如果avatar是标识符格式（如avatar_15），则构建完整URL
+  if (contact.avatar.startsWith('avatar_')) {
+    return `http://localhost:8080/api/user/avatar/${contact.id}`
+  } else if (contact.avatar.startsWith('/api/user/avatar/')) {
+    // 如果已经是相对路径，转换为完整URL
+    return `http://localhost:8080${contact.avatar}`
+  }
+  
+  return contact.avatar
+}
+
+const getOwnAvatar = () => {
+  // 直接使用authStore中的userAvatar getter，它已经处理了完整的URL生成
+  return authStore.userAvatar
 }
 
 const getBubbleClass = (message: Message) => {
@@ -405,7 +447,8 @@ onUnmounted(() => {
 }
 
 .own-message .message-item {
-  flex-direction: row-reverse;
+  flex-direction: row;
+  justify-content: flex-end;
 }
 
 .message-avatar {

@@ -414,6 +414,9 @@ const getUserAvatar = (user?: User) => {
     // 如果是本地上传的头像（以avatar_开头）
     if (user.avatar.startsWith('avatar_')) {
       return `http://localhost:8080/api/user/avatar/${user.id}`
+    } else if (user.avatar.startsWith('/api/user/avatar/')) {
+      // 如果已经是相对路径，转换为完整URL
+      return `http://localhost:8080${user.avatar}`
     }
     // 其他情况直接使用avatar字段
     return user.avatar

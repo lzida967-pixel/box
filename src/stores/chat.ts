@@ -116,15 +116,21 @@ export const useChatStore = defineStore('chat', {
             id: user.id.toString(),
             // 保持status为数字类型，与User接口一致
             status: user.status || 0,
-            // 确保avatar字段有正确的URL前缀（如果需要）
-            avatar: user.avatar ? (user.avatar.startsWith('http') ? user.avatar : `/api${user.avatar}`) : undefined
+            // 确保avatar字段有正确的URL
+            avatar: user.avatar ? `/api/user/avatar/${user.id}` : undefined
           }))
         console.log('加载联系人数据成功:', (this as any).contacts)
         // 调试avatar字段
         if ((this as any).contacts.length > 0) {
-          const firstContact = (this as any).contacts[0]
-          console.log('第一个联系人的avatar字段:', firstContact.avatar)
-          console.log('第一个联系人的所有字段:', firstContact)
+          console.log('所有联系人的avatar信息:')
+          ;(this as any).contacts.forEach((contact: any, index: number) => {
+            console.log(`联系人 ${index + 1}:`, {
+              id: contact.id,
+              name: contact.nickname || contact.username,
+              avatar: contact.avatar,
+              hasAvatar: !!contact.avatar
+            })
+          })
         }
       } catch (error) {
         console.error('加载联系人数据失败:', error)
