@@ -4,9 +4,7 @@
     <div class="sidebar-nav">
       <div class="nav-header">
         <el-avatar :src="authStore.userAvatar" :size="40" class="user-avatar" />
-        <div class="unread-badge" v-if="totalUnreadCount > 0">
-          {{ totalUnreadCount > 99 ? '99+' : totalUnreadCount }}
-        </div>
+
       </div>
       
       <div class="nav-items">
@@ -57,6 +55,12 @@
           <div class="conversation-avatar">
             <el-avatar :src="getContactAvatar(conversation)" :size="48" />
             <div v-if="getContactStatus(conversation) === 'online'" class="status-dot online"></div>
+            <el-badge
+              v-if="conversation.unreadCount > 0"
+              :value="conversation.unreadCount"
+              :max="99"
+              class="unread-badge"
+            />
           </div>
           
           <div class="conversation-content">
@@ -76,12 +80,7 @@
                 <span v-else class="no-message">暂无消息</span>
               </div>
               
-              <el-badge
-                v-if="conversation.unreadCount > 0"
-                :value="conversation.unreadCount"
-                :max="99"
-                class="unread-badge"
-              />
+
             </div>
           </div>
         </div>
