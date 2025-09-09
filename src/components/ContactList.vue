@@ -18,13 +18,16 @@
       <div class="contact-content">
         <div class="contact-header">
           <div class="contact-name">{{ getContactName(conversation) }}</div>
-          <div class="message-time">{{ formatTime(conversation.timestamp) }}</div>
+          <div class="message-time">{{ formatTime(getConversationLastMessageTime(conversation)) }}</div>
         </div>
         
         <div class="contact-footer">
           <div class="last-message">
             <span v-if="conversation.lastMessage">
               {{ getLastMessageText(conversation.lastMessage) }}
+            </span>
+            <span v-else-if="hasMessages(conversation)" class="no-message">
+              {{ getLastMessageTextFromStore(conversation) }}
             </span>
             <span v-else class="no-message">暂无消息</span>
           </div>
@@ -75,31 +78,70 @@ const getContactStatus = (conversation: Conversation) => {
 }
 
 const getLastMessageText = (message: Message) => {
-  if (message.type === 'text') {
+  if (message.messageType === 'text') {
     return message.content.length > 30 
       ? message.content.substring(0, 30) + '...' 
       : message.content
-  } else if (message.type === 'image') {
+  } else if (message.messageType === 'image') {
     return '[图片]'
-  } else if (message.type === 'file') {
+  } else if (message.messageType === 'file') {
     return '[文件]'
   }
   return message.content
 }
 
 const formatTime = (timestamp: Date) => {
-  const now = dayjs()
-  const messageTime = dayjs(timestamp)
-  
-  if (now.isSame(messageTime, 'day')) {
-    return messageTime.format('HH:mm')
-  } else if (now.diff(messageTime, 'day') === 1) {
-    return '昨天'
-  } else if (now.isSame(messageTime, 'week')) {
-    return messageTime.format('dddd')
-  } else {
-    return messageTime.format('MM/DD')
+  try {
+    const now = dayjs()
+    const messageTime = dayjs(timestamp)
+    
+    if (!messageTime.isValid()) {
+      console.warn('无效的时间戳:', timestamp)
+      return '未知时间'
+    }
+    
+    if (now.isSame(messageTime, 'day')) {
+      return messageTime.format('HH:mm')
+    } else if (now.subtract(1, 'day').isSame(messageTime, 'day')) {
+      return '昨天 ' + messageTime.format('HH:mm')
+    } else if (now.isSame(messageTime, 'year')) {
+      return messageTime.format('MM/DD HH:mm')
+    } else {
+      return messageTime.format('YYYY/MM/DD HH:mm')
+    }
+  } catch (error) {
+    console.error('时间格式化错误:', error, '时间戳:', timestamp)
+    return '时间错误'
   }
+}
+
+// 检查会话是否有消息
+const hasMessages = (conversation: Conversation) => {
+  const messages = chatStore.messages[conversation.id]
+  return messages && messages.length > 0
+}
+
+// 从store获取会话的最后一条消息
+const getLastMessageTextFromStore = (conversation: Conversation) => {
+  const messages = chatStore.messages[conversation.id]
+  if (messages && messages.length > 0) {
+    const lastMessage = messages[messages.length - 1]
+    return getLastMessageText(lastMessage)
+  }
+  return '暂无消息'
+}
+
+// 获取会话的最后消息时间
+const getConversationLastMessageTime = (conversation: Conversation) => {
+  const messages = chatStore.messages[conversation.id]
+  if (messages && messages.length > 0) {
+    // 获取会话中的最后一条消息（最新的消息）
+    const lastMessage = messages[messages.length - 1]
+    // 确保返回Date对象而不是字符串
+    const timeString = lastMessage.sendTime || lastMessage.createTime || lastMessage.timestamp
+    return new Date(timeString)
+  }
+  return conversation.timestamp
 }
 </script>
 

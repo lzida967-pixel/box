@@ -76,16 +76,30 @@ export const useChatStore = defineStore('chat', {
       return filtered
     },
 
-    // 获取当前用户的会话列表（按时间排序）
+    // 获取当前用户的会话列表（按最后消息时间排序，只显示有消息的会话）
     sortedConversations: (state: ChatState): Conversation[] => {
       const authStore = useAuthStore()
       const currentUserId = authStore.userInfo?.id
       if (!currentUserId) return []
 
       return [...state.conversations]
-        .filter((conv: Conversation) => conv.participantIds.includes(currentUserId.toString()))
+        .filter((conv: Conversation) => {
+          // 只显示有消息的会话
+          const hasMessages = state.messages[conv.id] && state.messages[conv.id].length > 0
+          return conv.participantIds.includes(currentUserId.toString()) && hasMessages
+        })
         .sort((a: Conversation, b: Conversation) => {
-          return new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime()
+          // 获取最后一条消息的时间，如果没有消息则使用会话时间戳
+          const getLastMessageTime = (conv: Conversation) => {
+            const messages = state.messages[conv.id]
+            if (messages && messages.length > 0) {
+              const lastMessage = messages[messages.length - 1]
+              return new Date(lastMessage.createTime || lastMessage.sendTime || lastMessage.timestamp).getTime()
+            }
+            return new Date(conv.timestamp).getTime()
+          }
+          
+          return getLastMessageTime(b) - getLastMessageTime(a)
         })
     }
   },
@@ -139,6 +153,9 @@ export const useChatStore = defineStore('chat', {
 
       // 加载该用户的会话数据（模拟从服务器获取）
       this.loadUserConversations(userId)
+      
+      // 加载真实的聊天历史记录
+      await this.loadRealChatHistory(userId)
     },
 
     // 加载用户会话数据
@@ -814,6 +831,36 @@ export const useChatStore = defineStore('chat', {
         }
         // 抛出错误让上层处理
         throw error
+      }
+    },
+
+    // 加载真实的聊天历史记录
+    async loadRealChatHistory(userId: string) {
+      try {
+        console.log('开始加载真实聊天历史记录，用户ID:', userId)
+        
+        // 1. 获取当前用户的所有联系人
+        await this.loadContacts()
+        
+        // 2. 为每个联系人加载聊天历史
+        for (const contact of this.contacts) {
+          if (contact.id.toString() !== userId) {
+            try {
+              // 创建或获取会话
+              const conversationId = this.startConversation(contact.id.toString())
+              if (conversationId) {
+                // 加载该会话的历史消息
+                await this.loadChatHistory(conversationId)
+              }
+            } catch (error) {
+              console.warn(`加载与联系人 ${contact.id} 的聊天历史失败:`, error)
+            }
+          }
+        }
+        
+        console.log('真实聊天历史记录加载完成')
+      } catch (error) {
+        console.error('加载真实聊天历史记录失败:', error)
       }
     }
   }

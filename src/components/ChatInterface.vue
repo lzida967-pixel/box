@@ -180,7 +180,22 @@ const getBubbleClass = (message: Message) => {
 }
 
 const formatMessageTime = (timestamp: Date | string) => {
-  return dayjs(timestamp).format('HH:mm')
+  const now = dayjs()
+  const messageTime = dayjs(timestamp)
+  
+  if (!messageTime.isValid()) {
+    return '未知时间'
+  }
+  
+  if (now.isSame(messageTime, 'day')) {
+    return messageTime.format('HH:mm')
+  } else if (now.subtract(1, 'day').isSame(messageTime, 'day')) {
+    return '昨天 ' + messageTime.format('HH:mm')
+  } else if (now.isSame(messageTime, 'year')) {
+    return messageTime.format('MM/DD HH:mm')
+  } else {
+    return messageTime.format('YYYY/MM/DD HH:mm')
+  }
 }
 
 const getContactDisplayName = (contact: User | null) => {
