@@ -40,13 +40,22 @@
             <div class="message-content">
               <div class="message-bubble" :class="getBubbleClass(message)">
                 <template v-if="isImage(message)">
-                  <!-- 先用原生 img 验证网络是否真正发出 -->
-                  <img
+                  <el-image
                     :src="imageSrc(message)"
-                    @error="(e) => console.debug('img加载失败', imageSrc(message), e)"
-                    @load="() => console.debug('img加载成功', imageSrc(message))"
-                    style="max-width: 220px; max-height: 220px; border-radius: 8px; object-fit: cover"
-                  />
+                    :preview-src-list="previewSrcList"
+                    :initial-index="previewIndex(message)"
+                    fit="cover"
+                    preview-teleported
+                    hide-on-click-modal
+                    :z-index="3000"
+                    style="max-width: 220px; max-height: 220px; border-radius: 8px; overflow: hidden"
+                  >
+                    <template #error>
+                      <div style="width:200px;height:160px;display:flex;align-items:center;justify-content:center;color:#999;background:#f5f5f5">
+                        图片加载失败
+                      </div>
+                    </template>
+                  </el-image>
                 </template>
                 <div v-else class="message-text">{{ message.content }}</div>
                 <div v-if="isOwnMessage(message)" class="message-status">
@@ -162,6 +171,20 @@ const currentContact = computed(() => {
 const messages = computed(() => {
   return chatStore.activeMessages || []
 })
+
+// 预览用：同会话的全部图片URL列表
+const previewSrcList = computed(() => {
+  const list = (chatStore.activeMessages || []).filter((m: any) => isImage(m))
+    .map((m: any) => imageSrc(m))
+    .filter((u: string) => !!u)
+  return list
+})
+
+// 预览用：获取当前消息在预览列表中的索引
+const previewIndex = (message: Message) => {
+  const url = imageSrc(message)
+  return previewSrcList.value.indexOf(url)
+}
 
 const canSend = computed(() => {
   return inputText.value.trim().length > 0
