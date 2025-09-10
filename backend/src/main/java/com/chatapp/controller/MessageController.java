@@ -41,6 +41,16 @@ public class MessageController {
             Integer messageType = request.get("messageType") != null ? 
                 Integer.valueOf(request.get("messageType").toString()) : 1;
 
+            // 入参兜底：当为图片消息且 content 非纯数字时，尝试读取 imageId 字段
+            if (messageType == 2) {
+                if (content == null || !content.toString().matches("^\\d+$")) {
+                    Object imageIdObj = request.get("imageId");
+                    if (imageIdObj != null && imageIdObj.toString().matches("^\\d+$")) {
+                        content = imageIdObj.toString();
+                    }
+                }
+            }
+
             Message message = messageService.sendPrivateMessage(userId, toUserId, content, messageType);
             
             return ResponseEntity.ok(createSuccessResponse("消息发送成功", message));

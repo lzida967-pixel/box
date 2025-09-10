@@ -39,7 +39,16 @@
             <!-- 消息内容 -->
             <div class="message-content">
               <div class="message-bubble" :class="getBubbleClass(message)">
-                <div class="message-text">{{ message.content }}</div>
+                <template v-if="isImage(message)">
+                  <!-- 先用原生 img 验证网络是否真正发出 -->
+                  <img
+                    :src="imageSrc(message)"
+                    @error="(e) => console.debug('img加载失败', imageSrc(message), e)"
+                    @load="() => console.debug('img加载成功', imageSrc(message))"
+                    style="max-width: 220px; max-height: 220px; border-radius: 8px; object-fit: cover"
+                  />
+                </template>
+                <div v-else class="message-text">{{ message.content }}</div>
                 <div v-if="isOwnMessage(message)" class="message-status">
                   <el-icon v-if="message.status === 'sending'" class="status-sending">
                     <Loading />
@@ -118,6 +127,7 @@ import { useChatStore } from '@/stores/chat'
 import { getWebSocketService } from '@/services/websocket'
 import type { Message, User } from '@/types'
 import dayjs from 'dayjs'
+import { imageApi } from '@/api'
 
 const props = defineProps<{
   contact?: User | null
@@ -221,6 +231,24 @@ const getBubbleClass = (message: Message) => {
   return isOwnMessage(message) ? 'own-bubble' : 'other-bubble'
 }
 
+const isImage = (message: Message) => {
+  const t: any = message.messageType
+  return t === 2 || t === 'image'
+}
+
+const imageSrc = (message: Message) => {
+  const raw = message.content
+  if (!raw || raw === '__uploading__') return ''
+  const idNum = Number(raw)
+  if (!Number.isFinite(idNum)) {
+    console.warn('图片消息content不是数字ID，忽略渲染图片：', raw, message)
+    return ''
+  }
+  const url = imageApi.url(idNum)
+  console.debug('生成图片URL', { id: idNum, url, messageType: message.messageType, message })
+  return url
+}
+
 const formatMessageTime = (timestamp: Date | string) => {
   const now = dayjs()
   const messageTime = dayjs(timestamp)
@@ -322,13 +350,76 @@ const selectImage = () => {
   imageInputRef.value?.click()
 }
 
-const handleImageSelect = (event: Event) => {
+import { chatApi, imageApi } from '@/api'
+
+const handleImageSelect = async (event: Event) => {
   const target = event.target as HTMLInputElement
   const files = target.files
-  if (files && files.length > 0) {
-    ElMessage.info('图片发送功能开发中')
+  try {
+    if (!chatStore.activeConversationId) return
+    // 解析当前会话的对方ID
+    const conv = chatStore.activeConversation
+    const me = authStore.userInfo?.id
+    const friendIdStr = conv?.participantIds.find(id => id !== String(me))
+    if (!friendIdStr) return
+    const friendId = parseInt(friendIdStr)
+
+    if (files && files.length > 0) {
+      for (const file of Array.from(files)) {
+        // 本地乐观消息
+        const tempId = Date.now() + Math.random()
+        const optimistic: Message = {
+          id: tempId as any,
+          fromUserId: me!,
+          toUserId: friendId,
+          content: '__uploading__', // 占位，发送成功后替换为图片ID
+          messageType: 'image',
+          status: 'sending',
+          sendTime: new Date().toISOString(),
+          createTime: new Date().toISOString(),
+          updateTime: new Date().toISOString(),
+          senderId: me!,
+          receiverId: friendId
+        }
+        // 推入当前会话消息
+        if (!chatStore.messages[chatStore.activeConversationId]) {
+          (chatStore as any).messages[chatStore.activeConversationId] = []
+        }
+        ;(chatStore as any).messages[chatStore.activeConversationId].push(optimistic)
+
+        // 上传+创建消息
+        const resp = await chatApi.sendImage(friendId, file)
+        if (resp.code === 200 && resp.data) {
+          const serverMsg = resp.data as any
+          // 后端应返回 message，其中 content=图片ID 或 data.imageId
+          const imageId = serverMsg.content ?? serverMsg.imageId ?? serverMsg.data?.imageId
+          // 找回本地临时消息并更新
+          const list = (chatStore as any).messages[chatStore.activeConversationId] as Message[]
+          const found = list.find(m => m.id === tempId)
+          if (found) {
+            found.id = serverMsg.id ?? found.id
+            found.status = 'delivered'
+            found.messageType = 'image'
+            found.content = String(imageId)
+            found.updateTime = new Date().toISOString()
+          }
+        } else {
+          ElMessage.error('图片发送失败')
+          // 标记失败
+          const list = (chatStore as any).messages[chatStore.activeConversationId] as Message[]
+          const found = list.find(m => m.id === tempId)
+          if (found) {
+            found.status = 'sent'
+          }
+        }
+      }
+    }
+  } catch (e:any) {
+    console.error(e)
+    ElMessage.error('图片发送失败')
+  } finally {
+    target.value = ''
   }
-  target.value = ''
 }
 
 const showContactInfo = () => {

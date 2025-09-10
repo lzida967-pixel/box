@@ -62,21 +62,21 @@ export const authApi = {
   /**
    * 用户登录
    */
-  login: (loginData: LoginRequest): Promise<ApiResponse<LoginResponse>> => {
+  login: (loginData: LoginRequest): Promise<AxiosResponse<ApiResponse<LoginResponse>>> => {
     return api.post('/auth/login', loginData)
   },
 
   /**
    * 用户注册
    */
-  register: (registerData: RegisterRequest): Promise<ApiResponse<UserInfo>> => {
+  register: (registerData: RegisterRequest): Promise<AxiosResponse<ApiResponse<UserInfo>>> => {
     return api.post('/auth/register', registerData)
   },
 
   /**
    * 刷新令牌
    */
-  refreshToken: (refreshToken: string): Promise<ApiResponse<RefreshTokenResponse>> => {
+  refreshToken: (refreshToken: string): Promise<AxiosResponse<ApiResponse<RefreshTokenResponse>>> => {
     return api.post('/auth/refresh', null, {
       params: { refreshToken }
     })
@@ -85,14 +85,14 @@ export const authApi = {
   /**
    * 检查用户名是否可用
    */
-  checkUsername: (username: string): Promise<ApiResponse<boolean>> => {
+  checkUsername: (username: string): Promise<AxiosResponse<ApiResponse<boolean>>> => {
     return api.get('/auth/check-username', { params: { username } })
   },
 
   /**
    * 检查邮箱是否可用
    */
-  checkEmail: (email: string): Promise<ApiResponse<boolean>> => {
+  checkEmail: (email: string): Promise<AxiosResponse<ApiResponse<boolean>>> => {
     return api.get('/auth/check-email', { params: { email } })
   }
 }
@@ -103,35 +103,35 @@ export const userApi = {
   /**
    * 获取当前用户信息 (兼容旧版调用)
    */
-  getCurrentUser: (): Promise<ApiResponse<UserInfo>> => {
+  getCurrentUser: (): Promise<AxiosResponse<ApiResponse<UserInfo>>> => {
     return api.get('/user/profile')
   },
 
   /**
    * 获取用户信息
    */
-  getProfile: (): Promise<ApiResponse<UserInfo>> => {
+  getProfile: (): Promise<AxiosResponse<ApiResponse<UserInfo>>> => {
     return api.get('/user/profile')
   },
 
   /**
    * 更新用户信息
    */
-  updateProfile: (userData: Partial<UserInfo>): Promise<ApiResponse<UserInfo>> => {
+  updateProfile: (userData: Partial<UserInfo>): Promise<AxiosResponse<ApiResponse<UserInfo>>> => {
     return api.put('/user/profile', userData)
   },
 
   /**
    * 修改密码
    */
-  changePassword: (passwordData: { oldPassword: string; newPassword: string }): Promise<ApiResponse<void>> => {
+  changePassword: (passwordData: { oldPassword: string; newPassword: string }): Promise<AxiosResponse<ApiResponse<void>>> => {
     return api.post('/user/change-password', passwordData)
   },
 
   /**
    * 上传头像
    */
-  uploadAvatar: (file: File): Promise<ApiResponse<string>> => {
+  uploadAvatar: (file: File): Promise<AxiosResponse<ApiResponse<string>>> => {
     const formData = new FormData()
     formData.append('avatar', file)
 
@@ -142,7 +142,7 @@ export const userApi = {
   /**
    * 更新在线状态
    */
-  updateStatus: (status: 'online' | 'offline' | 'away'): Promise<ApiResponse<void>> => {
+  updateStatus: (status: 'online' | 'offline' | 'away'): Promise<AxiosResponse<ApiResponse<void>>> => {
     return api.post('/user/status', { status })
   }
 }
@@ -153,7 +153,7 @@ export const chatApi = {
   /**
    * 获取私聊消息记录
    */
-  getPrivateMessages: (friendId: number, page = 1, size = 50): Promise<ApiResponse<any[]>> => {
+  getPrivateMessages: (friendId: number, page = 1, size = 50): Promise<AxiosResponse<ApiResponse<any[]>>> => {
     return api.get('/messages/private', {
       params: {
         friendId,
@@ -166,7 +166,7 @@ export const chatApi = {
   /**
    * 获取群聊消息记录
    */
-  getGroupMessages: (groupId: number, page = 1, size = 50): Promise<ApiResponse<any[]>> => {
+  getGroupMessages: (groupId: number, page = 1, size = 50): Promise<AxiosResponse<ApiResponse<any[]>>> => {
     return api.get('/messages/group', {
       params: {
         groupId,
@@ -179,7 +179,7 @@ export const chatApi = {
   /**
    * 获取聊天历史记录（新增）
    */
-  getChatHistory: (friendId: number, limit = 50, offset = 0): Promise<ApiResponse<any>> => {
+  getChatHistory: (friendId: number, limit = 50, offset = 0): Promise<AxiosResponse<ApiResponse<any>>> => {
     return api.get(`/messages/chat-history/${friendId}`, {
       params: {
         limit,
@@ -191,42 +191,73 @@ export const chatApi = {
   /**
    * 获取离线消息（新增）
    */
-  getOfflineMessages: (): Promise<ApiResponse<any[]>> => {
+  getOfflineMessages: (): Promise<AxiosResponse<ApiResponse<any[]>>> => {
     return api.get('/messages/offline')
   },
 
   /**
    * 标记离线消息为已读（新增）
    */
-  markOfflineMessagesAsRead: (messageIds: number[]): Promise<ApiResponse<void>> => {
+  markOfflineMessagesAsRead: (messageIds: number[]): Promise<AxiosResponse<ApiResponse<void>>> => {
     return api.put('/messages/offline/mark-read', { messageIds })
   },
 
   /**
-   * 发送消息
+   * 发送文本消息（兼容老接口占位，后端若无 /messages/send 可忽略）
    */
-  sendMessage: (message: any): Promise<ApiResponse<any>> => {
+  sendMessage: (message: any): Promise<AxiosResponse<ApiResponse<any>>> => {
     return api.post('/messages/send', message)
+  },
+
+  /**
+   * 发送图片消息（二进制存储）
+   * 后端建议提供 POST /images 上传图片并返回 { imageId }
+   * 然后再创建消息：POST /messages/private { toUserId, content: imageId, messageType: 2 }
+   * 如果后端提供一站式接口，也可直接 POST /messages/private/image
+   */
+  sendImage: async (friendId: number, file: File): Promise<AxiosResponse<ApiResponse<any>>> => {
+    try {
+      const fd = new FormData()
+      fd.append('file', file) // 确保表单键为 file
+      const imgResp = await api.post('/images', fd) as AxiosResponse<ApiResponse<{ id: number }>>
+      const imageIdRaw = (imgResp.data && (imgResp.data as any).data && (imgResp.data as any).data.id) ?? (imgResp.data as any).id
+      const imageId = Number(imageIdRaw)
+      if (!Number.isFinite(imageId)) {
+        console.error('[上传图片] 返回体异常:', imgResp?.data)
+        throw new Error('图片上传失败：未获得有效的图片ID')
+      }
+      return await api.post('/messages/private', {
+        toUserId: friendId,
+        content: String(imageId),
+        messageType: 2
+      })
+    } catch (error: any) {
+      const status = error?.response?.status
+      const respData = error?.response?.data
+      const msg = respData?.message || error?.message
+      console.error('[上传失败详情]', { status, respData, message: msg })
+      throw error
+    }
   },
 
   /**
    * 获取会话列表
    */
-  getConversations: (): Promise<ApiResponse<any[]>> => {
+  getConversations: (): Promise<AxiosResponse<ApiResponse<any[]>>> => {
     return api.get('/chat/conversations')
   },
 
   /**
    * 创建私聊会话
    */
-  createPrivateConversation: (userId: string): Promise<ApiResponse<any>> => {
+  createPrivateConversation: (userId: string): Promise<AxiosResponse<ApiResponse<any>>> => {
     return api.post('/chat/conversation/private', { userId })
   },
 
   /**
    * 创建群聊会话
    */
-  createGroupConversation: (userIds: string[], name: string): Promise<ApiResponse<any>> => {
+  createGroupConversation: (userIds: string[], name: string): Promise<AxiosResponse<ApiResponse<any>>> => {
     return api.post('/chat/conversation/group', {
       userIds,
       name
@@ -240,21 +271,21 @@ export const contactApi = {
   /**
    * 获取联系人列表
    */
-  getContacts: (): Promise<ApiResponse<any[]>> => {
+  getContacts: (): Promise<AxiosResponse<ApiResponse<any[]>>> => {
     return api.get('/contacts')
   },
 
   /**
    * 搜索用户
    */
-  searchUsers: (keyword: string): Promise<ApiResponse<any[]>> => {
+  searchUsers: (keyword: string): Promise<AxiosResponse<ApiResponse<any[]>>> => {
     return api.get('/contacts/search', { params: { keyword } })
   },
 
   /**
    * 添加好友请求
    */
-  addFriend: (userId: string, message?: string): Promise<ApiResponse<void>> => {
+  addFriend: (userId: string, message?: string): Promise<AxiosResponse<ApiResponse<void>>> => {
     return api.post('/contacts/add', {
       userId,
       message
@@ -264,42 +295,42 @@ export const contactApi = {
   /**
    * 处理好友请求
    */
-  handleFriendRequest: (requestId: string, action: 'accept' | 'reject'): Promise<ApiResponse<void>> => {
+  handleFriendRequest: (requestId: string, action: 'accept' | 'reject'): Promise<AxiosResponse<ApiResponse<void>>> => {
     return api.post(`/contacts/request/${requestId}/${action}`)
   },
 
   /**
    * 获取收到的好友请求
    */
-  getReceivedRequests: (): Promise<ApiResponse<any[]>> => {
+  getReceivedRequests: (): Promise<AxiosResponse<ApiResponse<any[]>>> => {
     return api.get('/contacts/requests/received')
   },
 
   /**
    * 获取发送的好友请求
    */
-  getSentRequests: (): Promise<ApiResponse<any[]>> => {
+  getSentRequests: (): Promise<AxiosResponse<ApiResponse<any[]>>> => {
     return api.get('/contacts/requests/sent')
   },
 
   /**
    * 删除联系人
    */
-  removeContact: (userId: string): Promise<ApiResponse<void>> => {
+  removeContact: (userId: string): Promise<AxiosResponse<ApiResponse<void>>> => {
     return api.delete(`/contacts/${userId}`)
   },
 
   /**
    * 更新好友备注
    */
-  updateFriendNickname: (friendId: string, nickname: string): Promise<ApiResponse<void>> => {
+  updateFriendNickname: (friendId: string, nickname: string): Promise<AxiosResponse<ApiResponse<void>>> => {
     return api.put(`/contacts/${friendId}/nickname`, { nickname })
   },
 
   /**
    * 删除用户头像
    */
-  deleteAvatar: (userId: string): Promise<ApiResponse<void>> => {
+  deleteAvatar: (userId: string): Promise<AxiosResponse<ApiResponse<void>>> => {
     return api.delete(`/user/avatar/${userId}`)
   }
 }
@@ -310,7 +341,7 @@ export const fileApi = {
   /**
    * 上传文件
    */
-  upload: (file: File, type: 'image' | 'file' = 'file'): Promise<ApiResponse<string>> => {
+  upload: (file: File, type: 'image' | 'file' = 'file'): Promise<AxiosResponse<ApiResponse<string>>> => {
     const formData = new FormData()
     formData.append('file', file)
     formData.append('type', type)
@@ -325,9 +356,15 @@ export const fileApi = {
   /**
    * 获取文件下载链接
    */
-  getDownloadUrl: (fileId: string): Promise<ApiResponse<string>> => {
+  getDownloadUrl: (fileId: string): Promise<AxiosResponse<ApiResponse<string>>> => {
     return api.get(`/file/download/${fileId}`)
   }
+}
+
+// ==================== 图片（二进制）获取API ====================
+export const imageApi = {
+  /** 获取图片二进制URL（供前端img使用） */
+  url: (id: string | number) => `http://localhost:8080/api/images/${id}`
 }
 
 // ==================== 系统相关API ====================
@@ -336,14 +373,14 @@ export const systemApi = {
   /**
    * 健康检查
    */
-  health: (): Promise<ApiResponse<string>> => {
+  health: (): Promise<AxiosResponse<ApiResponse<string>>> => {
     return api.get('/test/hello')
   },
 
   /**
    * 获取系统信息
    */
-  getSystemInfo: (): Promise<ApiResponse<any>> => {
+  getSystemInfo: (): Promise<AxiosResponse<ApiResponse<any>>> => {
     return api.get('/system/info')
   }
 }
@@ -355,5 +392,6 @@ export default {
   chat: chatApi,
   contact: contactApi,
   file: fileApi,
+  image: imageApi,
   system: systemApi
 }

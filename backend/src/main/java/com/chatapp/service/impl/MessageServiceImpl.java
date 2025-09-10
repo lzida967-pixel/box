@@ -28,10 +28,28 @@ public class MessageServiceImpl implements MessageService {
         Message message = new Message();
         message.setFromUserId(fromUserId);
         message.setToUserId(toUserId);
-        message.setContent(content);
-        message.setMessageType(messageType != null ? messageType : 1);
+        int type = messageType != null ? messageType : 1;
+
+        // 当为图片消息时，content 必须为 images.id（数字）
+        if (type == 2) {
+            if (content == null) {
+                throw new IllegalArgumentException("图片消息缺少 content(imageId)");
+            }
+            try {
+                // 允许字符串数字，标准化为字符串
+                Long imageId = Long.valueOf(content.trim());
+                message.setContent(String.valueOf(imageId));
+            } catch (NumberFormatException e) {
+                // 一律拒绝文件名等非法值，避免错误数据入库
+                throw new IllegalArgumentException("图片消息 content 必须为数字ID，实际为: " + content);
+            }
+        } else {
+            message.setContent(content);
+        }
+
+        message.setMessageType(type);
         message.setSendTime(LocalDateTime.now());
-        
+
         messageMapper.insert(message);
         return message;
     }

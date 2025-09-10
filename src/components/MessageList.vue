@@ -17,8 +17,20 @@
           <div class="message-content">
             <!-- 消息气泡 -->
             <div class="message-bubble" :class="getBubbleClass(message)">
-              <div class="message-text">{{ message.content }}</div>
-              
+              <template v-if="isImage(message)">
+                <el-image
+                  :src="imageSrc(message)"
+                  :preview-src-list="[imageSrc(message)]"
+                  fit="cover"
+                  style="max-width: 220px; max-height: 220px; border-radius: 8px; overflow: hidden"
+                >
+                  <template #error>
+                    <div style="width:200px;height:160px;display:flex;align-items:center;justify-content:center;color:#999;background:#f5f5f5">图片加载失败</div>
+                  </template>
+                </el-image>
+              </template>
+              <div v-else class="message-text">{{ message.content }}</div>
+
               <!-- 消息状态（仅自己的消息显示） -->
               <div v-if="isOwnMessage(message)" class="message-status">
                 <el-icon v-if="message.status === 'sending'" class="status-sending">
@@ -64,6 +76,7 @@
 import { ref, computed, nextTick, watch } from 'vue'
 import { useChatStore } from '@/stores/chat'
 import type { Message } from '@/types'
+import { imageApi } from '@/api'
 import dayjs from 'dayjs'
 
 interface Props {
@@ -100,6 +113,18 @@ const getSenderAvatar = (message: Message) => {
 
 const getBubbleClass = (message: Message) => {
   return isOwnMessage(message) ? 'own-bubble' : 'other-bubble'
+}
+
+const isImage = (message: Message) => {
+  const t = message.messageType
+  return t === 2 || t === 'image'
+}
+
+const imageSrc = (message: Message) => {
+  // message.content 保存图片ID
+  const id = (message.content || '').toString()
+  if (!id || id === '__uploading__') return ''
+  return imageApi.url(id)
 }
 
 const formatMessageTime = (createTime: string) => {
