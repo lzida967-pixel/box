@@ -3,6 +3,7 @@ package com.chatapp.controller;
 import com.chatapp.entity.Message;
 import com.chatapp.service.MessageService;
 import com.chatapp.service.OfflineMessageService;
+import com.chatapp.service.WebSocketSessionService;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
@@ -26,6 +27,9 @@ public class MessageController {
 
     @Autowired
     private OfflineMessageService offlineMessageService;
+
+    @Autowired
+    private WebSocketSessionService sessionService;
 
     /**
      * 发送私聊消息
@@ -52,7 +56,22 @@ public class MessageController {
             }
 
             Message message = messageService.sendPrivateMessage(userId, toUserId, content, messageType);
-            
+
+            // 入库成功后，复用 WebSocket 推送给接收方（与 ChatWebSocketHandler 保持一致负载）
+            Map<String, Object> wsPayload = new HashMap<>();
+            wsPayload.put("type", "private");
+            wsPayload.put("fromUserId", userId);
+            wsPayload.put("toUserId", toUserId);
+            wsPayload.put("message", message);
+            wsPayload.put("timestamp", System.currentTimeMillis());
+
+            // 在线实时推送；离线则走离线推送服务
+            if (sessionService.isUserOnline(toUserId)) {
+                sessionService.sendToUser(toUserId, wsPayload);
+            } else {
+                offlineMessageService.pushMessageToUser(toUserId, message);
+            }
+
             return ResponseEntity.ok(createSuccessResponse("消息发送成功", message));
         } catch (Exception e) {
             return ResponseEntity.badRequest()
