@@ -82,9 +82,31 @@
     <!-- 消息输入区域 -->
     <div class="input-area">
       <div class="input-toolbar">
-        <el-button text @click="showEmojiPicker = !showEmojiPicker">
-          <el-icon><Sunny /></el-icon>
-        </el-button>
+        <el-popover
+          placement="top-start"
+          :width="320"
+          trigger="click"
+          v-model:visible="showEmojiPicker"
+          popper-class="emoji-popover"
+        >
+          <template #reference>
+            <el-button text>
+              <span style="font-size:18px;line-height:1">😀</span>
+            </el-button>
+          </template>
+          <div class="emoji-grid">
+            <button
+              v-for="emo in emojis"
+              :key="emo"
+              class="emoji-btn"
+              @click="insertEmoji(emo)"
+              type="button"
+            >
+              {{ emo }}
+            </button>
+          </div>
+        </el-popover>
+
         <el-button text @click="selectImage">
           <el-icon><Picture /></el-icon>
         </el-button>
@@ -93,6 +115,7 @@
       <div class="input-main">
         <el-input
           v-model="inputText"
+          ref="inputRef"
           type="textarea"
           :rows="3"
           resize="none"
@@ -131,6 +154,7 @@
 <script setup lang="ts">
 import { ref, computed, onMounted, nextTick, watch, onUnmounted } from 'vue'
 import { ElMessage } from 'element-plus'
+
 import { useAuthStore } from '@/stores/auth'
 import { useChatStore } from '@/stores/chat'
 import { getWebSocketService } from '@/services/websocket'
@@ -151,10 +175,37 @@ const chatStore = useChatStore()
 
 const messageListRef = ref<HTMLElement>()
 const imageInputRef = ref<HTMLInputElement>()
+const inputRef = ref<any>(null)
 const inputText = ref('')
 const showEmojiPicker = ref(false)
 const wsService = getWebSocketService()
 const typingTimer = ref<NodeJS.Timeout | null>(null)
+
+// 简易常用表情集（可后续替换为更全的表情包/分类）
+const emojis = ref<string[]>([
+  '😀','😁','😂','🤣','😊','😍','😘','😜','🤗','🤩',
+  '👍','🙏','👏','👌','✌️','🤝','👋','💪','🔥','⭐',
+  '🎉','🥳','❤️','💖','💯','✔️','❗','❓','😢','😡'
+])
+
+// 将表情插入到当前光标位置
+const insertEmoji = (emoji: string) => {
+  const elTextarea = (inputRef.value?.textarea as HTMLTextAreaElement | undefined)
+  if (!elTextarea) {
+    inputText.value += emoji
+    return
+  }
+  const start = elTextarea.selectionStart ?? inputText.value.length
+  const end = elTextarea.selectionEnd ?? inputText.value.length
+  const before = inputText.value.slice(0, start)
+  const after = inputText.value.slice(end)
+  inputText.value = before + emoji + after
+  nextTick(() => {
+    const pos = start + emoji.length
+    elTextarea.selectionStart = elTextarea.selectionEnd = pos
+    elTextarea.focus()
+  })
+}
 
 // 计算属性
 const currentContact = computed(() => {
@@ -689,5 +740,34 @@ onUnmounted(() => {
 
 .message-list::-webkit-scrollbar-thumb:hover {
   background: #bfbfbf;
+}
+</style>
+
+<style scoped>
+/* 表情选择器样式（使用 el-popover 容器） */
+:global(.emoji-popover) {
+  padding: 8px;
+}
+.emoji-grid {
+  display: grid;
+  grid-template-columns: repeat(10, 28px);
+  gap: 6px;
+  max-height: 180px;
+  overflow-y: auto;
+  padding: 4px;
+}
+.emoji-btn {
+  width: 28px;
+  height: 28px;
+  line-height: 28px;
+  text-align: center;
+  border: none;
+  background: transparent;
+  cursor: pointer;
+  font-size: 18px;
+  border-radius: 4px;
+}
+.emoji-btn:hover {
+  background: #f2f3f5;
 }
 </style>
