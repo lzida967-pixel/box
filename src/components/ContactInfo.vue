@@ -7,7 +7,7 @@
   >
     <div class="contact-info-content" v-if="contact">
       <div class="contact-avatar-section">
-        <el-avatar :src="contact.avatar" :size="80" />
+        <el-avatar :src="getUserAvatar(contact)" :size="80" />
       </div>
       
       <div class="contact-details">
@@ -60,7 +60,7 @@
 
 <script setup lang="ts">
 import { computed } from 'vue'
-import { ElMessage } from 'element-plus'
+import { ElMessage } from 'element-plus/es'
 import type { User } from '@/types'
 
 interface Props {
@@ -105,6 +105,24 @@ const getGenderText = (gender?: number) => {
     case 0:
     default: return '未知'
   }
+}
+
+const getUserAvatar = (user?: User) => {
+  const fallback = 'https://avatars.githubusercontent.com/u/0?v=4'
+  if (!user) return fallback
+  const ava = typeof user.avatar === 'string' ? user.avatar : ''
+  if (ava) {
+    if (ava.startsWith('avatar_')) {
+      if (user.id != null) {
+        return `http://localhost:8080/api/user/avatar/${String(user.id)}`
+      }
+      return fallback
+    } else if (ava.startsWith('/api/user/avatar/')) {
+      return `http://localhost:8080${ava}`
+    }
+    return ava
+  }
+  return fallback
 }
 
 const getSignature = (contact: User) => {
