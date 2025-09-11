@@ -731,9 +731,9 @@ export const useChatStore = defineStore('chat', {
         content: message.content || messageData.content,
         messageType: this.convertMessageType(message.messageType || messageData.messageType || 1),
         status: 'delivered',
-        sendTime: message.sendTime || messageData.sendTime || new Date().toISOString(),
-        createTime: message.createTime || messageData.createTime || new Date().toISOString(),
-        updateTime: message.updateTime || messageData.updateTime || new Date().toISOString(),
+        sendTime: this.validateAndFormatTime(message.sendTime || messageData.sendTime),
+        createTime: this.validateAndFormatTime(message.createTime || messageData.createTime),
+        updateTime: this.validateAndFormatTime(message.updateTime || messageData.updateTime),
         // 兼容字段
         senderId: message.fromUserId || message.senderId || messageData.fromUserId,
         receiverId: message.toUserId || message.receiverId || messageData.toUserId,
@@ -744,6 +744,35 @@ export const useChatStore = defineStore('chat', {
       
       // 添加到聊天store
       this.addMessage(chatMessage)
+    },
+
+    // 验证和格式化时间的辅助方法
+    validateAndFormatTime(timeValue: any): string {
+      if (!timeValue) {
+        return new Date().toISOString()
+      }
+      
+      // 如果是数字时间戳
+      if (typeof timeValue === 'number') {
+        return new Date(timeValue).toISOString()
+      }
+      
+      // 如果是字符串，尝试解析
+      if (typeof timeValue === 'string') {
+        const parsedDate = new Date(timeValue)
+        if (!isNaN(parsedDate.getTime())) {
+          return parsedDate.toISOString()
+        }
+      }
+      
+      // 如果是Date对象
+      if (timeValue instanceof Date && !isNaN(timeValue.getTime())) {
+        return timeValue.toISOString()
+      }
+      
+      // 如果都无效，使用当前时间
+      console.warn('无效的时间值，使用当前时间:', timeValue)
+      return new Date().toISOString()
     },
 
     // 转换消息类型辅助方法

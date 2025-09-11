@@ -328,6 +328,7 @@ const formatMessageTime = (timestamp: Date | string) => {
   const messageTime = dayjs(timestamp)
   
   if (!messageTime.isValid()) {
+    console.warn('无效的消息时间:', timestamp)
     return '未知时间'
   }
   
