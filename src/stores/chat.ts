@@ -550,7 +550,7 @@ export const useChatStore = defineStore('chat', {
     },
 
     // 添加接收到的消息
-    addMessage(message: Message) {
+    async addMessage(message: Message) {
       const authStore = useAuthStore()
       const currentUserId = authStore.userInfo?.id
       if (!currentUserId) return
@@ -569,6 +569,13 @@ export const useChatStore = defineStore('chat', {
       const receiverIdStr = receiverId.toString()
       const currentUserIdStr = currentUserId.toString()
 
+      // 如果发送者不在联系人列表中，重新加载联系人列表
+      const senderContact = (this as any).contacts.find((contact: User) => contact.id.toString() === senderIdStr)
+      if (!senderContact && senderIdStr !== currentUserIdStr) {
+        console.log('发送者不在联系人列表中，重新加载联系人列表')
+        await this.loadContacts()
+      }
+
       // 确定会话ID
       let conversationId: string | null = null
       
@@ -580,12 +587,20 @@ export const useChatStore = defineStore('chat', {
 
       if (existingConv) {
         conversationId = existingConv.id
+        
+        // 检查消息是否已存在（避免重复添加）
+        const existingMessages = (this as any).messages[conversationId] || []
+        const messageExists = existingMessages.some((msg: Message) => msg.id === message.id)
+        if (messageExists) {
+          console.log('消息已存在，跳过添加:', message.id)
+          return
+        }
       } else {
         // 创建新会话
         const newConversation: Conversation = {
           id: `conv_${senderIdStr}_${receiverIdStr}_${Date.now()}`,
           participantIds: [senderIdStr, receiverIdStr],
-          unreadCount: senderIdStr !== currentUserIdStr ? 1 : 0,
+          unreadCount: 0, // 初始化为0，后面会正确计算
           timestamp: new Date(message.createTime),
           type: 'private'
         }
@@ -598,7 +613,16 @@ export const useChatStore = defineStore('chat', {
         if (!(this as any).messages[conversationId]) {
           ; (this as any).messages[conversationId] = []
         }
-        ; (this as any).messages[conversationId].push(message)
+        // 检查消息是否已存在（避免重复添加）
+        const existingMessages = (this as any).messages[conversationId]
+        const messageExists = existingMessages.some((msg: Message) => msg.id === message.id)
+        if (!messageExists) {
+          ; (this as any).messages[conversationId].push(message)
+          console.log('添加新消息到会话:', conversationId, '消息ID:', message.id)
+        } else {
+          console.log('消息已存在，跳过添加:', message.id)
+          return
+        }
 
         // 更新会话信息
         const conversation = (this as any).conversations.find((conv: Conversation) => conv.id === conversationId)
@@ -608,7 +632,8 @@ export const useChatStore = defineStore('chat', {
           
           // 如果不是当前活跃会话且不是自己发送的消息，增加未读数
           if (conversationId !== (this as any).activeConversationId && senderIdStr !== currentUserIdStr) {
-            conversation.unreadCount++
+            conversation.unreadCount = (conversation.unreadCount || 0) + 1
+            console.log('更新未读数:', conversation.unreadCount, '会话ID:', conversationId)
           }
         }
       }
