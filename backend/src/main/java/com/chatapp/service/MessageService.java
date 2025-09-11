@@ -65,4 +65,9 @@ public interface MessageService {
      * 获取最后一条消息
      */
     Message getLastMessage(Long userId, Long contactId, Boolean isGroup);
+
+    /**
+     * 删除与特定用户的所有聊天记录
+     */
+    boolean deleteAllMessagesWithUser(Long userId, Long friendId);
 }

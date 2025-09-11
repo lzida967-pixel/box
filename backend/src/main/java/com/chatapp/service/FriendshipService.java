@@ -86,6 +86,14 @@ public interface FriendshipService {
     boolean isFriend(Long userId, Long friendId);
 
     /**
+     * 检查两个用户是否是好友关系（双向检查）
+     * @param userId 用户ID
+     * @param friendId 好友ID
+     * @return 是否是好友
+     */
+    boolean areFriends(Long userId, Long friendId);
+
+    /**
      * 获取好友关系详情
      * @param userId 用户ID
      * @param friendId 好友ID

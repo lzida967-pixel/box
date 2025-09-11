@@ -923,6 +923,48 @@ export const useChatStore = defineStore('chat', {
       } catch (error) {
         console.error('加载真实聊天历史记录失败:', error)
       }
+    },
+
+    // 清理与特定好友相关的聊天数据
+    clearFriendChatData(friendId: number) {
+      try {
+        const friendIdStr = friendId.toString()
+        
+        // 找到与该好友相关的会话
+        const conversationsToRemove = (this as any).conversations.filter((conv: Conversation) => 
+          conv.participantIds.includes(friendIdStr)
+        )
+        
+        // 删除会话和消息
+        conversationsToRemove.forEach((conv: Conversation) => {
+          // 从会话列表中移除
+          const index = (this as any).conversations.findIndex((c: Conversation) => c.id === conv.id)
+          if (index !== -1) {
+            ;(this as any).conversations.splice(index, 1)
+          }
+          
+          // 删除消息记录
+          delete (this as any).messages[conv.id]
+        })
+        
+        // 如果当前活跃会话是被删除的会话，清空活跃会话
+        if ((this as any).activeConversationId && 
+            conversationsToRemove.some((conv: Conversation) => conv.id === (this as any).activeConversationId)) {
+          ;(this as any).activeConversationId = null
+        }
+        
+        // 从联系人列表中移除
+        const contactIndex = (this as any).contacts.findIndex((contact: User) => 
+          contact.id.toString() === friendIdStr
+        )
+        if (contactIndex !== -1) {
+          ;(this as any).contacts.splice(contactIndex, 1)
+        }
+        
+        console.log('好友聊天数据清理完成，好友ID:', friendId)
+      } catch (error) {
+        console.error('清理好友聊天数据失败:', error)
+      }
     }
   }
 })

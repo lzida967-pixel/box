@@ -89,4 +89,10 @@ public interface MessageMapper {
     Message findLastMessage(@Param("userId") Long userId, 
                           @Param("contactId") Long contactId,
                           @Param("isGroup") Boolean isGroup);
+
+    /**
+     * 删除与特定用户的所有聊天记录（软删除）
+     */
+    int deleteAllMessagesWithUser(@Param("userId") Long userId, 
+                                 @Param("friendId") Long friendId);
 }

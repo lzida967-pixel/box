@@ -5,6 +5,7 @@ import com.chatapp.entity.User;
 import com.chatapp.mapper.FriendshipMapper;
 import com.chatapp.mapper.UserMapper;
 import com.chatapp.service.FriendshipService;
+import com.chatapp.service.MessageService;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -24,11 +25,13 @@ public class FriendshipServiceImpl implements FriendshipService {
 
     private final FriendshipMapper friendshipMapper;
     private final UserMapper userMapper;
+    private final MessageService messageService;
 
     @Autowired
-    public FriendshipServiceImpl(FriendshipMapper friendshipMapper, UserMapper userMapper) {
+    public FriendshipServiceImpl(FriendshipMapper friendshipMapper, UserMapper userMapper, MessageService messageService) {
         this.friendshipMapper = friendshipMapper;
         this.userMapper = userMapper;
+        this.messageService = messageService;
     }
 
     @Override
@@ -217,11 +220,23 @@ public class FriendshipServiceImpl implements FriendshipService {
             if (friendship2.getStatus() != 1) {
                 throw new RuntimeException("只能删除已确认的好友关系");
             }
-            // 逻辑删除：将status改为极狐（待确认），deleted改为1
+            // 逻辑删除：将status改为0（待确认），deleted改为1
             friendship2.setStatus(0);
             friendship2.setDeleted(1);
             friendship2.setUpdateTime(LocalDateTime.now());
             deleteCount  += friendshipMapper.update1(friendship2);
+        }
+
+        // 删除好友关系成功后，同时删除与该好友的所有聊天记录
+        if (deleteCount > 0) {
+            try {
+                messageService.deleteAllMessagesWithUser(userId, friendId);
+                System.out.println("已删除用户 " + userId + " 与好友 " + friendId + " 的所有聊天记录");
+            } catch (Exception e) {
+                System.err.println("删除聊天记录失败: " + e.getMessage());
+                // 注意：这里不抛出异常，避免影响好友关系的删除
+                // 但会记录错误日志，便于后续处理
+            }
         }
 
         return deleteCount > 0;
@@ -299,5 +314,22 @@ public class FriendshipServiceImpl implements FriendshipService {
         }
         // 如果用户→好友方向的关系不存在，返回好友→用户方向的关系
         return friendshipMapper.findByFriendAndUser(userId, friendId);
+    }
+
+    @Override
+    public boolean areFriends(Long userId, Long friendId) {
+        // 检查双向好友关系：A->B 和 B->A 都必须存在且状态为已确认且未删除
+        Optional<Friendship> friendship1 = friendshipMapper.findByUserAndFriend(userId, friendId);
+        Optional<Friendship> friendship2 = friendshipMapper.findByUserAndFriend(friendId, userId);
+        
+        boolean isFriend1 = friendship1.isPresent() && 
+                           friendship1.get().getStatus() == 1 && 
+                           friendship1.get().getDeleted() == 0;
+        boolean isFriend2 = friendship2.isPresent() && 
+                           friendship2.get().getStatus() == 1 && 
+                           friendship2.get().getDeleted() == 0;
+        
+        // 只有双向关系都存在且都是已确认状态才算是好友
+        return isFriend1 && isFriend2;
     }
 }

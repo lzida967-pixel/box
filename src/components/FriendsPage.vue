@@ -78,8 +78,9 @@
 <script setup lang="ts">
 import { ref, computed, onMounted, onUnmounted } from 'vue'
 import ElMessage from 'element-plus/es/components/message/index.mjs'
-import { ArrowRight, User, ChatDotRound, Delete } from '@element-plus/icons-vue'
+import { ElMessageBox } from 'element-plus'
 import { contactApi } from '@/api'
+import { useChatStore } from '@/stores/chat'
 import AddFriendDialog from './AddFriendDialog.vue'
 import FriendRequestsDialog from './FriendRequestsDialog.vue'
 import type { User as UserType } from '@/types'
@@ -91,6 +92,7 @@ interface Emits {
 
 const emit = defineEmits<Emits>()
 
+const chatStore = useChatStore()
 const friends = ref<UserType[]>([])
 const searchText = ref('')
 const loading = ref(false)
@@ -113,7 +115,10 @@ const loadFriends = async () => {
   loading.value = true
   try {
     const response = await contactApi.getContacts()
-    friends.value = response.data || []
+    console.log('好友列表API响应:', response.data)
+    // API直接返回好友数组，不是包装在data字段中
+    friends.value = Array.isArray(response.data) ? response.data : []
+    console.log('解析后的好友列表:', friends.value)
     // 如果之前选中的好友还在列表中，保持选中状态
     if (selectedFriend.value) {
       const stillExists = friends.value.find(f => f.id === selectedFriend.value?.id)
@@ -122,6 +127,7 @@ const loadFriends = async () => {
       }
     }
   } catch (error: any) {
+    console.error('加载好友列表失败:', error)
     ElMessage.error(error.message || '加载好友列表失败')
   } finally {
     loading.value = false
@@ -182,17 +188,48 @@ const startChat = (friend: UserType) => {
 // 删除好友
 const removeFriend = async (friend: UserType) => {
   try {
+    await ElMessageBox.confirm(
+      `确定要删除好友 "${friend.nickname || friend.username}" 吗？删除后将同时清除所有聊天记录，此操作不可恢复。`,
+      '删除好友',
+      {
+        confirmButtonText: '确定删除',
+        cancelButtonText: '取消',
+        type: 'warning',
+        confirmButtonClass: 'el-button--danger'
+      }
+    )
+
+    // 调用删除好友API
     await contactApi.removeContact(friend.id.toString())
+    
+    // 清理本地聊天数据
+    clearLocalChatData(friend.id)
+    
     ElMessage.success('好友删除成功')
+    
     // 重新加载好友列表
     await loadFriends()
+    
     // 如果删除的是当前选中的好友，清空选中状态
     if (selectedFriend.value?.id === friend.id) {
       selectedFriend.value = null
     }
+    
+    // 发送全局事件通知其他组件
+    window.dispatchEvent(new CustomEvent('friend-deleted', { 
+      detail: { friendId: friend.id } 
+    }))
   } catch (error: any) {
-    ElMessage.error(error.message || '删除好友失败')
+    if (error !== 'cancel') {
+      console.error('删除好友失败:', error)
+      ElMessage.error(error.message || '删除好友失败')
+    }
   }
+}
+
+// 清理本地聊天数据
+const clearLocalChatData = (friendId: number) => {
+  chatStore.clearFriendChatData(friendId)
 }
 
 const getStatusType = (status: number) => {

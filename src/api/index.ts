@@ -321,6 +321,13 @@ export const contactApi = {
   },
 
   /**
+   * 检查好友关系
+   */
+  checkFriendship: (friendId: number): Promise<AxiosResponse<ApiResponse<{ isFriend: boolean }>>> => {
+    return api.get(`/contacts/check/${friendId}`)
+  },
+
+  /**
    * 更新好友备注
    */
   updateFriendNickname: (friendId: string, nickname: string): Promise<AxiosResponse<ApiResponse<void>>> => {

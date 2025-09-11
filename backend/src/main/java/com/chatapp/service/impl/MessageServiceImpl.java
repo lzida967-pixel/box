@@ -119,4 +119,10 @@ public class MessageServiceImpl implements MessageService {
     public Message getLastMessage(Long userId, Long contactId, Boolean isGroup) {
         return messageMapper.findLastMessage(userId, contactId, isGroup != null ? isGroup : false);
     }
+
+    @Override
+    @Transactional
+    public boolean deleteAllMessagesWithUser(Long userId, Long friendId) {
+        return messageMapper.deleteAllMessagesWithUser(userId, friendId) > 0;
+    }
 }

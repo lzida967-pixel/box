@@ -60,7 +60,9 @@
 
 <script setup lang="ts">
 import { computed } from 'vue'
-import { ElMessage } from 'element-plus/es'
+import { ElMessage, ElMessageBox } from 'element-plus'
+import { contactApi } from '@/api'
+import { useChatStore } from '@/stores/chat'
 import type { User } from '@/types'
 
 interface Props {
@@ -70,31 +72,36 @@ interface Props {
 
 interface Emits {
   (e: 'update:modelValue', value: boolean): void
+  (e: 'friend-deleted', friendId: number): void
 }
 
 const props = defineProps<Props>()
 const emit = defineEmits<Emits>()
+
+const chatStore = useChatStore()
 
 const visible = computed({
   get: () => props.modelValue,
   set: (value) => emit('update:modelValue', value)
 })
 
-const getStatusType = (status: string) => {
+const getStatusType = (status?: number) => {
   switch (status) {
-    case 'online': return 'success'
-    case 'away': return 'warning'
-    case 'offline': return 'danger'
-    default: return 'info'
+    case 1: return 'success'  // 在线
+    case 2: return 'warning'  // 忙碌
+    case 3: return 'info'     // 离开
+    case 0: 
+    default: return 'danger'  // 离线
   }
 }
 
-const getStatusText = (status: string) => {
+const getStatusText = (status?: number) => {
   switch (status) {
-    case 'online': return '在线'
-    case 'away': return '离开'
-    case 'offline': return '离线'
-    default: return '未知'
+    case 1: return '在线'
+    case 2: return '忙碌'
+    case 3: return '离开'
+    case 0: 
+    default: return '离线'
   }
 }
 
@@ -114,7 +121,7 @@ const getUserAvatar = (user?: User) => {
   if (ava) {
     if (ava.startsWith('avatar_')) {
       if (user.id != null) {
-        return `http://localhost:8080/api/user/avatar/${String(user.id)}`
+        return `http://localhost:8080/api/user/avatar/${user.id}`
       }
       return fallback
     } else if (ava.startsWith('/api/user/avatar/')) {
@@ -126,14 +133,7 @@ const getUserAvatar = (user?: User) => {
 }
 
 const getSignature = (contact: User) => {
-  // 模拟个性签名
-  const signatures = {
-    '1': '系统管理员',
-    '2': '你们已成为好友，现在可以开始聊天了',
-    '3': '加好友请备注来意，本号不闲聊',
-    '4': '管理员账号'
-  }
-  return signatures[contact.id as keyof typeof signatures] || '这个人很懒，什么都没留下'
+  return contact.signature || '这个人很懒，什么都没留下'
 }
 
 const sendMessage = () => {
@@ -141,8 +141,52 @@ const sendMessage = () => {
   handleClose()
 }
 
-const removeContact = () => {
-  ElMessage.warning('删除好友功能开发中...')
+const removeContact = async () => {
+  if (!props.contact) {
+    ElMessage.error('联系人信息不存在')
+    return
+  }
+
+  try {
+    await ElMessageBox.confirm(
+      `确定要删除好友 "${props.contact.nickname || props.contact.username}" 吗？删除后将同时清除所有聊天记录，此操作不可恢复。`,
+      '删除好友',
+      {
+        confirmButtonText: '确定删除',
+        cancelButtonText: '取消',
+        type: 'warning',
+        confirmButtonClass: 'el-button--danger'
+      }
+    )
+
+    // 调用删除好友API
+    await contactApi.removeContact(props.contact.id.toString())
+    
+    // 清理本地聊天记录
+    clearLocalChatData(props.contact.id)
+    
+    ElMessage.success('删除好友成功')
+    
+    // 发送好友删除事件
+    emit('friend-deleted', props.contact.id)
+    
+    // 发送全局事件通知其他组件
+    window.dispatchEvent(new CustomEvent('friend-deleted', { 
+      detail: { friendId: props.contact.id } 
+    }))
+    
+    handleClose()
+  } catch (error: any) {
+    if (error !== 'cancel') {
+      console.error('删除好友失败:', error)
+      ElMessage.error(error.message || '删除好友失败')
+    }
+  }
+}
+
+// 清理本地聊天数据
+const clearLocalChatData = (friendId: number) => {
+  chatStore.clearFriendChatData(friendId)
 }
 
 const handleClose = () => {

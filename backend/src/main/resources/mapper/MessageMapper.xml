@@ -131,4 +131,14 @@
         LIMIT 1
     </select>
 
+    <update id="deleteAllMessagesWithUser">
+        UPDATE messages SET deleted = 1, update_time = NOW()
+        WHERE deleted = 0 
+        AND group_id IS NULL
+        AND (
+            (from_user_id = #{userId} AND to_user_id = #{friendId})
+            OR (from_user_id = #{friendId} AND to_user_id = #{userId})
+        )
+    </update>
+
 </mapper>

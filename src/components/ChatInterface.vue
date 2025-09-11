@@ -375,9 +375,32 @@ const handleKeyDown = (event: KeyboardEvent) => {
 }
 
 const sendMessage = async () => {
-  if (!canSend.value || !chatStore.activeConversationId) return
+  console.log('开始发送消息...')
+  
+  if (!canSend.value || !chatStore.activeConversationId) {
+    console.log('发送条件不满足，取消发送')
+    return
+  }
 
   const content = inputText.value.trim()
+  console.log('准备发送消息内容:', content)
+  
+  // 检查好友关系
+  const contact = currentContact.value
+  if (contact) {
+    console.log('检查与联系人的好友关系:', contact.id)
+    const isFriend = await checkFriendship(contact.id)
+    console.log('好友关系检查结果:', isFriend)
+    
+    if (!isFriend) {
+      console.log('不是好友，阻止发送消息')
+      ElMessage.warning('你们已经不是好友了，无法发送消息')
+      return
+    }
+  }
+
+  console.log('好友关系验证通过，开始发送消息')
+  
   try {
     // 使用WebSocket发送消息
     chatStore.sendWebSocketMessage(content)
@@ -387,8 +410,55 @@ const sendMessage = async () => {
     stopTypingIndicator()
     
     scrollToBottom()
+    
+    console.log('消息发送完成')
   } catch (error) {
+    console.error('发送消息失败:', error)
     ElMessage.error('发送消息失败')
+  }
+}
+
+// 检查好友关系
+const checkFriendship = async (friendId: number): Promise<boolean> => {
+  try {
+    // 首先检查本地联系人列表中是否还有这个好友
+    const isInContactList = chatStore.contacts.some(contact => contact.id === friendId)
+    if (!isInContactList) {
+      return false
+    }
+    
+    // 调用API验证服务器端的好友关系
+    const response = await contactApi.checkFriendship(friendId)
+    console.log('好友关系检查API响应:', response.data)
+    
+    // 兼容多种响应格式
+    let isFriend = false
+    
+    if (response.data) {
+      // 格式1: {code: 200, message: "...", data: {isFriend: boolean}}
+      if (response.data.data && typeof response.data.data.isFriend === 'boolean') {
+        isFriend = response.data.data.isFriend
+      }
+      // 格式2: {isFriend: boolean}
+      else if (typeof response.data.isFriend === 'boolean') {
+        isFriend = response.data.isFriend
+      }
+      // 格式3: 直接是boolean值
+      else if (typeof response.data === 'boolean') {
+        isFriend = response.data
+      }
+      else {
+        console.warn('API响应结构异常，使用本地检查')
+        return isInContactList
+      }
+    }
+    
+    console.log('解析后的好友关系状态:', isFriend)
+    return isFriend
+  } catch (error) {
+    console.error('检查好友关系失败:', error)
+    // 如果API调用失败，回退到本地检查
+    return chatStore.contacts.some(contact => contact.id === friendId)
   }
 }
 
@@ -425,7 +495,7 @@ const selectImage = () => {
   imageInputRef.value?.click()
 }
 
-import { chatApi, imageApi } from '@/api'
+import { chatApi, imageApi, contactApi } from '@/api'
 
 const handleImageSelect = async (event: Event) => {
   const target = event.target as HTMLInputElement

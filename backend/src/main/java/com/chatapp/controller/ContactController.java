@@ -277,4 +277,23 @@ public class ContactController {
         response.put("data", null);
         return response;
     }
+
+    /**
+     * 检查好友关系
+     */
+    @GetMapping("/check/{friendId}")
+    public ResponseEntity<?> checkFriendship(@PathVariable Long friendId) {
+        try {
+            Long currentUserId = getCurrentUserId();
+            boolean isFriend = friendshipService.areFriends(currentUserId, friendId);
+            
+            Map<String, Object> result = new HashMap<>();
+            result.put("isFriend", isFriend);
+            
+            return ResponseEntity.ok(createSuccessResponse("检查好友关系成功", result));
+        } catch (Exception e) {
+            return ResponseEntity.badRequest()
+                    .body(createErrorResponse(400, e.getMessage()));
+        }
+    }
 }
