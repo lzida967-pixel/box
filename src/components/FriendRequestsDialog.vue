@@ -165,6 +165,9 @@ const handleRequest = async (requestId: number, accept: boolean) => {
     receivedRequests.value = receivedRequests.value.filter(req => req.friendship.id !== requestId)
     
     emit('request-handled')
+    
+    // 发送全局事件通知其他组件更新未读数量
+    window.dispatchEvent(new CustomEvent('friend-request-handled'))
   } catch (error: any) {
     ElMessage.error(error.message || '处理请求失败')
   } finally {

@@ -24,11 +24,19 @@
         />
 
         <!-- 新的朋友选项 -->
-        <div class="new极速版-friends-section" @click="showFriendRequests = true">
+        <div class="new-friends-section" @click="showFriendRequests = true">
           <div class="new-friends-item">
             <el-icon class="new-friends-icon"><User /></el-icon>
             <span class="new-friends-text">新的朋友</span>
-            <el-icon class="new-friends-arrow"><ArrowRight /></el-icon>
+            <div class="new-friends-right">
+              <el-badge 
+                v-if="unreadRequestCount > 0" 
+                :value="unreadRequestCount" 
+                :max="99"
+                class="friend-request-badge"
+              />
+              <el-icon class="new-friends-arrow"><ArrowRight /></el-icon>
+            </div>
           </div>
         </div>
 
@@ -99,6 +107,7 @@ const loading = ref(false)
 const showAddFriend = ref(false)
 const showFriendRequests = ref(false)
 const selectedFriend = ref<UserType | null>(null)
+const unreadRequestCount = ref(0)
 
 const filteredFriends = computed(() => {
   if (!searchText.value) return friends.value
@@ -134,6 +143,23 @@ const loadFriends = async () => {
   }
 }
 
+// 获取未读好友请求数量
+const loadUnreadRequestCount = async () => {
+  try {
+    const response = await contactApi.getReceivedRequests()
+    console.log('好友请求API响应:', response.data)
+    // 计算未处理的请求数量（状态为待确认的请求）
+    const requests = Array.isArray(response.data) ? response.data : []
+    unreadRequestCount.value = requests.filter(request => 
+      request.friendship && (request.friendship.status === 0 || request.friendship.status === 'pending')
+    ).length
+    console.log('未读好友请求数量:', unreadRequestCount.value)
+  } catch (error: any) {
+    console.error('获取好友请求失败:', error)
+    // 不显示错误消息，避免干扰用户体验
+  }
+}
+
 // 选择好友
 const selectFriend = (friend: UserType) => {
   selectedFriend.value = friend
@@ -146,14 +172,22 @@ onMounted(() => {
   // 监听好友删除事件，重新加载好友列表
   const handleFriendDeleted = () => {
     loadFriends()
+    loadUnreadRequestCount()
+  }
+  
+  // 监听好友请求处理事件，更新未读数量
+  const handleFriendRequestHandled = () => {
+    loadUnreadRequestCount()
   }
   
   // 添加事件监听器
   window.addEventListener('friend-deleted', handleFriendDeleted)
+  window.addEventListener('friend-request-handled', handleFriendRequestHandled)
   
   // 组件卸载时移除事件监听器
   onUnmounted(() => {
     window.removeEventListener('friend-deleted', handleFriendDeleted)
+    window.removeEventListener('friend-request-handled', handleFriendRequestHandled)
   })
 })
 
@@ -179,6 +213,8 @@ const handleFriendAdded = () => {
   ElMessage.success('好友请求已发送')
   // 重新加载好友列表
   loadFriends()
+  // 刷新未读请求数量
+  loadUnreadRequestCount()
 }
 
 const startChat = (friend: UserType) => {
@@ -254,6 +290,7 @@ const getStatusText = (status: number) => {
 
 onMounted(() => {
   loadFriends()
+  loadUnreadRequestCount()
 })
 </script>
 
@@ -326,6 +363,16 @@ onMounted(() => {
   flex: 1;
   font-size: 16px;
   color: #333;
+}
+
+.new-friends-right {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.friend-request-badge {
+  flex-shrink: 0;
 }
 
 .new-friends-arrow {
