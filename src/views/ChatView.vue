@@ -483,10 +483,34 @@ const handleLogout = async () => {
 }
 
 // 添加好友页面需要的聊天启动方法
-const startChatWithContact = (contact: User) => {
-  handleSelectContact(contact)
-  // 自动切换到消息标签页显示聊天界面
-  activeTab.value = 'messages'
+const startChatWithContact = async (contact: User) => {
+  console.log('开始与好友聊天:', contact)
+  
+  // 检查用户登录状态和必要信息
+  if (!authStore.isLoggedIn || !authStore.userInfo) {
+    console.error('用户未登录或用户信息缺失')
+    return
+  }
+  
+  // 确保联系人列表是最新的
+  await chatStore.loadContacts()
+  console.log('联系人列表已更新')
+  
+  // 开始与选中联系人的对话
+  const conversationId = chatStore.startConversation(contact.id.toString())
+  console.log('创建/找到对话ID:', conversationId)
+  
+  if (conversationId) {
+    // 设置活动对话
+    await chatStore.setActiveConversation(conversationId)
+    console.log('设置活动对话:', conversationId)
+    
+    // 切换到消息标签页显示聊天界面
+    activeTab.value = 'messages'
+    console.log('切换到消息标签页')
+  } else {
+    console.error('无法创建或找到对话')
+  }
 }
 
 // 处理好友选中事件
@@ -494,6 +518,7 @@ const handleFriendSelected = (friend: User) => {
   selectedFriend.value = friend
   // 调试：输出好友数据查看包含的字段
   console.log('选中的好友数据:', friend)
+  // 只设置选中状态，不自动开始聊天
 }
 
 // 显示删除好友确认对话框

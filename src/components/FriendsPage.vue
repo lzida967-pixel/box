@@ -76,7 +76,7 @@
 </template>
 
 <script setup lang="ts">
-import { ref, computed, onMounted } from 'vue'
+import { ref, computed, onMounted, onUnmounted } from 'vue'
 import ElMessage from 'element-plus/es/components/message/index.mjs'
 import { ArrowRight, User, ChatDotRound, Delete } from '@element-plus/icons-vue'
 import { contactApi } from '@/api'
@@ -86,6 +86,7 @@ import type { User as UserType } from '@/types'
 
 interface Emits {
   (e: 'start-chat', user: UserType): void
+  (e: 'friend-selected', user: UserType): void
 }
 
 const emit = defineEmits<Emits>()

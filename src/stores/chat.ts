@@ -76,7 +76,7 @@ export const useChatStore = defineStore('chat', {
       return filtered
     },
 
-    // 获取当前用户的会话列表（按最后消息时间排序，只显示有消息的会话）
+    // 获取当前用户的会话列表（按最后消息时间排序，显示有消息的会话和当前活跃的会话）
     sortedConversations: (state: ChatState): Conversation[] => {
       const authStore = useAuthStore()
       const currentUserId = authStore.userInfo?.id
@@ -84,9 +84,10 @@ export const useChatStore = defineStore('chat', {
 
       return [...state.conversations]
         .filter((conv: Conversation) => {
-          // 只显示有消息的会话
+          // 显示有消息的会话，或者当前活跃的会话（即使没有消息）
           const hasMessages = state.messages[conv.id] && state.messages[conv.id].length > 0
-          return conv.participantIds.includes(currentUserId.toString()) && hasMessages
+          const isActiveConversation = conv.id === state.activeConversationId
+          return conv.participantIds.includes(currentUserId.toString()) && (hasMessages || isActiveConversation)
         })
         .sort((a: Conversation, b: Conversation) => {
           // 获取最后一条消息的时间，如果没有消息则使用会话时间戳
