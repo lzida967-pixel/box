@@ -1,0 +1,127 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.chatapp.mapper.GroupAnnouncementMapper">
+
+    <!-- 结果映射 -->
+    <resultMap id="GroupAnnouncementResultMap" type="com.chatapp.entity.GroupAnnouncement">
+        <id column="id" property="id"/>
+        <result column="group_id" property="groupId"/>
+        <result column="publisher_id" property="publisherId"/>
+        <result column="title" property="title"/>
+        <result column="content" property="content"/>
+        <result column="is_pinned" property="isPinned"/>
+        <result column="status" property="status"/>
+        <result column="publish_time" property="publishTime"/>
+        <result column="create_time" property="createTime"/>
+        <result column="update_time" property="updateTime"/>
+        <result column="deleted" property="deleted"/>
+    </resultMap>
+
+    <!-- 基础字段 -->
+    <sql id="Base_Column_List">
+        id, group_id, publisher_id, title, content, is_pinned, status,
+        publish_time, create_time, update_time, deleted
+    </sql>
+
+    <!-- 创建群公告 -->
+    <insert id="insertAnnouncement" parameterType="com.chatapp.entity.GroupAnnouncement" useGeneratedKeys="true" keyProperty="id">
+        INSERT INTO group_announcements (
+            group_id, publisher_id, title, content, is_pinned, status,
+            publish_time, create_time, update_time, deleted
+        ) VALUES (
+            #{groupId}, #{publisherId}, #{title}, #{content}, #{isPinned}, #{status},
+            #{publishTime}, #{createTime}, #{updateTime}, #{deleted}
+        )
+    </insert>
+
+    <!-- 根据ID查询群公告 -->
+    <select id="selectAnnouncementById" parameterType="long" resultMap="GroupAnnouncementResultMap">
+        SELECT <include refid="Base_Column_List"/>
+        FROM group_announcements
+        WHERE id = #{id} AND deleted = 0
+    </select>
+
+    <!-- 查询群组的所有公告 -->
+    <select id="selectAnnouncementsByGroupId" parameterType="long" resultMap="GroupAnnouncementResultMap">
+        SELECT <include refid="Base_Column_List"/>
+        FROM group_announcements
+        WHERE group_id = #{groupId} AND status = 1 AND deleted = 0
+        ORDER BY is_pinned DESC, publish_time DESC
+    </select>
+
+    <!-- 查询群组的最新公告 -->
+    <select id="selectLatestAnnouncementByGroupId" parameterType="long" resultMap="GroupAnnouncementResultMap">
+        SELECT <include refid="Base_Column_List"/>
+        FROM group_announcements
+        WHERE group_id = #{groupId} AND status = 1 AND deleted = 0
+        ORDER BY publish_time DESC
+        LIMIT 1
+    </select>
+
+    <!-- 查询群组的置顶公告 -->
+    <select id="selectPinnedAnnouncementsByGroupId" parameterType="long" resultMap="GroupAnnouncementResultMap">
+        SELECT <include refid="Base_Column_List"/>
+        FROM group_announcements
+        WHERE group_id = #{groupId} AND is_pinned = 1 AND status = 1 AND deleted = 0
+        ORDER BY publish_time DESC
+    </select>
+
+    <!-- 更新群公告 -->
+    <update id="updateAnnouncement" parameterType="com.chatapp.entity.GroupAnnouncement">
+        UPDATE group_announcements
+        SET title = #{title},
+            content = #{content},
+            is_pinned = #{isPinned},
+            status = #{status},
+            update_time = #{updateTime}
+        WHERE id = #{id} AND deleted = 0
+    </update>
+
+    <!-- 置顶公告 -->
+    <update id="pinAnnouncement">
+        UPDATE group_announcements
+        SET is_pinned = 1,
+            update_time = NOW()
+        WHERE id = #{id} AND deleted = 0
+    </update>
+
+    <!-- 取消置顶公告 -->
+    <update id="unpinAnnouncement">
+        UPDATE group_announcements
+        SET is_pinned = 0,
+            update_time = NOW()
+        WHERE id = #{id} AND deleted = 0
+    </update>
+
+    <!-- 撤回公告 -->
+    <update id="recallAnnouncement">
+        UPDATE group_announcements
+        SET status = 2,
+            update_time = NOW()
+        WHERE id = #{id} AND deleted = 0
+    </update>
+
+    <!-- 删除公告（软删除） -->
+    <update id="deleteAnnouncement">
+        UPDATE group_announcements
+        SET deleted = 1,
+            status = 0,
+            update_time = NOW()
+        WHERE id = #{id}
+    </update>
+
+    <!-- 检查公告是否存在 -->
+    <select id="existsById" parameterType="long" resultType="boolean">
+        SELECT COUNT(1) > 0
+        FROM group_announcements
+        WHERE id = #{id} AND deleted = 0
+    </select>
+
+    <!-- 取消群组所有公告的置顶状态 -->
+    <update id="unpinAllAnnouncements">
+        UPDATE group_announcements 
+        SET is_pinned = 0, update_time = NOW()
+        WHERE group_id = #{groupId} AND deleted = 0
+    </update>
+
+</mapper>

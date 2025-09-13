@@ -1,0 +1,235 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.chatapp.mapper.GroupMemberMapper">
+
+    <!-- 结果映射 -->
+    <resultMap id="GroupMemberResultMap" type="com.chatapp.entity.GroupMember">
+        <id column="id" property="id"/>
+        <result column="group_id" property="groupId"/>
+        <result column="user_id" property="userId"/>
+        <result column="member_role" property="memberRole"/>
+        <result column="member_nickname" property="memberNickname"/>
+        <result column="remark" property="remark"/>
+        <result column="join_time" property="joinTime"/>
+        <result column="invite_user_id" property="inviteUserId"/>
+        <result column="mute_until" property="muteUntil"/>
+        <result column="status" property="status"/>
+        <result column="create_time" property="createTime"/>
+        <result column="update_time" property="updateTime"/>
+        <result column="deleted" property="deleted"/>
+    </resultMap>
+
+    <!-- 基础字段 -->
+    <sql id="Base_Column_List">
+        id, group_id, user_id, member_role, member_nickname, remark, join_time,
+        invite_user_id, mute_until, status, create_time, update_time, deleted
+    </sql>
+
+    <!-- 添加群成员 -->
+    <insert id="insertMember" parameterType="com.chatapp.entity.GroupMember" useGeneratedKeys="true" keyProperty="id">
+        INSERT INTO group_members (
+            group_id, user_id, member_role, member_nickname, remark, join_time,
+            invite_user_id, mute_until, status, create_time, update_time, deleted
+        ) VALUES (
+            #{groupId}, #{userId}, #{memberRole}, #{memberNickname}, #{remark}, #{joinTime},
+            #{inviteUserId}, #{muteUntil}, #{status}, #{createTime}, #{updateTime}, #{deleted}
+        )
+    </insert>
+
+    <!-- 批量添加群成员 -->
+    <insert id="insertMembers" parameterType="list">
+        INSERT INTO group_members (
+            group_id, user_id, member_role, member_nickname, remark, join_time,
+            invite_user_id, mute_until, status, create_time, update_time, deleted
+        ) VALUES
+        <foreach collection="members" item="member" separator=",">
+            (#{member.groupId}, #{member.userId}, #{member.memberRole}, #{member.memberNickname}, 
+             #{member.remark}, #{member.joinTime}, #{member.inviteUserId}, #{member.muteUntil}, 
+             #{member.status}, #{member.createTime}, #{member.updateTime}, #{member.deleted})
+        </foreach>
+    </insert>
+
+    <!-- 根据ID查询群成员 -->
+    <select id="selectMemberById" parameterType="long" resultMap="GroupMemberResultMap">
+        SELECT <include refid="Base_Column_List"/>
+        FROM group_members
+        WHERE id = #{id} AND deleted = 0
+    </select>
+
+    <!-- 查询群组的所有成员 -->
+    <select id="selectMembersByGroupId" parameterType="long" resultMap="GroupMemberResultMap">
+        SELECT <include refid="Base_Column_List"/>
+        FROM group_members
+        WHERE group_id = #{groupId} AND deleted = 0
+        ORDER BY member_role DESC, join_time ASC
+    </select>
+
+    <!-- 查询群组的有效成员（未退出、未被踢） -->
+    <select id="selectActiveMembersByGroupId" parameterType="long" resultMap="GroupMemberResultMap">
+        SELECT <include refid="Base_Column_List"/>
+        FROM group_members
+        WHERE group_id = #{groupId} AND status = 1 AND deleted = 0
+        ORDER BY member_role DESC, join_time ASC
+    </select>
+
+    <!-- 查询用户在指定群组中的成员信息 -->
+    <select id="selectMemberByGroupAndUser" resultMap="GroupMemberResultMap">
+        SELECT <include refid="Base_Column_List"/>
+        FROM group_members
+        WHERE group_id = #{groupId} AND user_id = #{userId} AND deleted = 0
+    </select>
+
+    <!-- 查询用户加入的所有群组 -->
+    <select id="selectMembersByUserId" parameterType="long" resultMap="GroupMemberResultMap">
+        SELECT <include refid="Base_Column_List"/>
+        FROM group_members
+        WHERE user_id = #{userId} AND status = 1 AND deleted = 0
+        ORDER BY join_time DESC
+    </select>
+
+    <!-- 更新群成员信息 -->
+    <update id="updateMember" parameterType="com.chatapp.entity.GroupMember">
+        UPDATE group_members
+        SET member_role = #{memberRole},
+            member_nickname = #{memberNickname},
+            remark = #{remark},
+            mute_until = #{muteUntil},
+            status = #{status},
+            update_time = #{updateTime}
+        WHERE id = #{id} AND deleted = 0
+    </update>
+
+    <!-- 更新群成员角色 -->
+    <update id="updateMemberRole">
+        UPDATE group_members
+        SET member_role = #{memberRole},
+            update_time = NOW()
+        WHERE id = #{id} AND deleted = 0
+    </update>
+
+    <!-- 更新群成员昵称 -->
+    <update id="updateMemberNickname">
+        UPDATE group_members
+        SET member_nickname = #{memberNickname},
+            update_time = NOW()
+        WHERE id = #{id} AND deleted = 0
+    </update>
+
+    <!-- 更新群备注 -->
+    <update id="updateGroupRemark">
+        UPDATE group_members
+        SET remark = #{remark},
+            update_time = NOW()
+        WHERE group_id = #{groupId} AND user_id = #{userId} AND deleted = 0
+    </update>
+
+    <!-- 禁言群成员 -->
+    <update id="muteMember">
+        UPDATE group_members
+        SET mute_until = #{muteUntil},
+            update_time = NOW()
+        WHERE id = #{id} AND deleted = 0
+    </update>
+
+    <!-- 解除禁言 -->
+    <update id="unmuteMember">
+        UPDATE group_members
+        SET mute_until = NULL,
+            update_time = NOW()
+        WHERE id = #{id} AND deleted = 0
+    </update>
+
+    <!-- 批量禁言 -->
+    <update id="muteMembers">
+        UPDATE group_members
+        SET mute_until = #{muteUntil},
+            update_time = NOW()
+        WHERE id IN
+        <foreach collection="memberIds" item="id" open="(" separator="," close=")">
+            #{id}
+        </foreach>
+        AND deleted = 0
+    </update>
+
+    <!-- 批量解除禁言 -->
+    <update id="unmuteMembers">
+        UPDATE group_members
+        SET mute_until = NULL,
+            update_time = NOW()
+        WHERE id IN
+        <foreach collection="memberIds" item="id" open="(" separator="," close=")">
+            #{id}
+        </foreach>
+        AND deleted = 0
+    </update>
+
+    <!-- 移除群成员（更新状态为已退出） -->
+    <update id="removeMember">
+        UPDATE group_members
+        SET status = 0,
+            update_time = NOW()
+        WHERE id = #{id}
+    </update>
+
+    <!-- 批量移除群成员 -->
+    <update id="removeMembers">
+        UPDATE group_members
+        SET status = 0,
+            update_time = NOW()
+        WHERE id IN
+        <foreach collection="memberIds" item="id" open="(" separator="," close=")">
+            #{id}
+        </foreach>
+    </update>
+
+    <!-- 删除群成员（软删除） -->
+    <update id="deleteMember">
+        UPDATE group_members
+        SET deleted = 1,
+            status = 0,
+            update_time = NOW()
+        WHERE id = #{id}
+    </update>
+
+    <!-- 检查用户是否为群成员 -->
+    <select id="isMember" resultType="boolean">
+        SELECT COUNT(1) > 0
+        FROM group_members
+        WHERE group_id = #{groupId} AND user_id = #{userId} 
+          AND status = 1 AND deleted = 0
+    </select>
+
+    <!-- 检查用户是否为群主或管理员 -->
+    <select id="isAdminOrOwner" resultType="boolean">
+        SELECT COUNT(1) > 0
+        FROM group_members
+        WHERE group_id = #{groupId} AND user_id = #{userId} 
+          AND member_role IN (2, 3) AND status = 1 AND deleted = 0
+    </select>
+
+    <!-- 获取群组成员数量 -->
+    <select id="countActiveMembers" parameterType="long" resultType="int">
+        SELECT COUNT(1)
+        FROM group_members
+        WHERE group_id = #{groupId} AND status = 1 AND deleted = 0
+    </select>
+
+    <!-- 查询被禁言的成员 -->
+    <select id="selectMutedMembers" parameterType="long" resultMap="GroupMemberResultMap">
+        SELECT <include refid="Base_Column_List"/>
+        FROM group_members
+        WHERE group_id = #{groupId} AND mute_until IS NOT NULL 
+          AND mute_until > NOW() AND status = 1 AND deleted = 0
+        ORDER BY mute_until DESC
+    </select>
+
+    <!-- 查询群管理员列表 -->
+    <select id="selectAdminMembers" parameterType="long" resultMap="GroupMemberResultMap">
+        SELECT <include refid="Base_Column_List"/>
+        FROM group_members
+        WHERE group_id = #{groupId} AND member_role IN (2, 3) 
+          AND status = 1 AND deleted = 0
+        ORDER BY member_role DESC, join_time ASC
+    </select>
+
+</mapper>

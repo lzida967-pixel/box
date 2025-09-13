@@ -2,8 +2,10 @@ package com.chatapp.service.impl;
 
 import com.chatapp.entity.Friendship;
 import com.chatapp.entity.User;
+import com.chatapp.entity.GroupMember;
 import com.chatapp.mapper.FriendshipMapper;
 import com.chatapp.mapper.UserMapper;
+import com.chatapp.mapper.GroupMemberMapper;
 import com.chatapp.service.FriendshipService;
 import com.chatapp.service.MessageService;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -13,6 +15,7 @@ import org.springframework.transaction.annotation.Transactional;
 import java.time.LocalDateTime;
 import java.util.List;
 import java.util.Optional;
+import java.util.stream.Collectors;
 
 /**
  * 好友关系服务实现类
@@ -26,12 +29,14 @@ public class FriendshipServiceImpl implements FriendshipService {
     private final FriendshipMapper friendshipMapper;
     private final UserMapper userMapper;
     private final MessageService messageService;
+    private final GroupMemberMapper groupMemberMapper;
 
     @Autowired
-    public FriendshipServiceImpl(FriendshipMapper friendshipMapper, UserMapper userMapper, MessageService messageService) {
+    public FriendshipServiceImpl(FriendshipMapper friendshipMapper, UserMapper userMapper, MessageService messageService, GroupMemberMapper groupMemberMapper) {
         this.friendshipMapper = friendshipMapper;
         this.userMapper = userMapper;
         this.messageService = messageService;
+        this.groupMemberMapper = groupMemberMapper;
     }
 
     @Override
@@ -331,5 +336,22 @@ public class FriendshipServiceImpl implements FriendshipService {
         
         // 只有双向关系都存在且都是已确认状态才算是好友
         return isFriend1 && isFriend2;
+    }
+
+    @Override
+    public List<User> getFriendsNotInGroup(Long userId, Long groupId) {
+        // 获取所有好友
+        List<User> allFriends = getFriends(userId);
+        
+        // 获取群内活跃成员ID列表（只包含状态为1且未删除的成员）
+        List<Long> groupMemberIds = groupMemberMapper.selectActiveMembersByGroupId(groupId)
+                .stream()
+                .map(GroupMember::getUserId)
+                .collect(Collectors.toList());
+        
+        // 过滤掉已在群内的好友
+        return allFriends.stream()
+                .filter(friend -> !groupMemberIds.contains(friend.getId()))
+                .collect(Collectors.toList());
     }
 }

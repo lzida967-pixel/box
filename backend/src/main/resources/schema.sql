@@ -23,27 +23,6 @@ CREATE TABLE IF NOT EXISTS users (
     INDEX idx_deleted (deleted)
 ) ENGINE=INNODB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci COMMENT='用户表';
 
--- 创建群组表
-CREATE TABLE IF NOT EXISTS `groups` (
-    id BIGINT AUTO_INCREMENT PRIMARY KEY COMMENT '群组ID',
-    NAME VARCHAR(100) NOT NULL COMMENT '群组名称',
-    DESCRIPTION VARCHAR(500) COMMENT '群组描述',
-    avatar VARCHAR(500) COMMENT '群组头像URL',
-    owner_id BIGINT NOT NULL COMMENT '群主ID',
-    max_members INT DEFAULT 500 COMMENT '最大成员数',
-    member_count INT DEFAULT 0 COMMENT '当前成员数',
-    STATUS INT DEFAULT 1 COMMENT '群组状态: 0-禁用, 1-正常',
-    invite_code VARCHAR(50) COMMENT '邀请码',
-    allow_invite INT DEFAULT 1 COMMENT '是否允许邀请: 0-不允许, 1-允许',
-    create_time TIMESTAMP DEFAULT CURRENT_TIMESTAMP COMMENT '创建时间',
-    update_time TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP COMMENT '更新时间',
-    deleted INT DEFAULT 0 COMMENT '是否删除: 0-未删除, 1-已删除',
-
-    INDEX idx_owner_id (owner_id),
-    INDEX idx_status (STATUS),
-    INDEX idx_create_time (create_time),
-    INDEX idx_deleted (deleted)
-) ENGINE=INNODB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci COMMENT='群组表';
 
 -- 创建消息表
 CREATE TABLE IF NOT EXISTS messages (
@@ -74,26 +53,6 @@ CREATE TABLE IF NOT EXISTS messages (
     INDEX idx_deleted (deleted)
 ) ENGINE=INNODB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci COMMENT='消息表';
 
--- 创建群组成员表
-CREATE TABLE IF NOT EXISTS group_members (
-    id BIGINT AUTO_INCREMENT PRIMARY KEY COMMENT '成员关系ID',
-    group_id BIGINT NOT NULL COMMENT '群组ID',
-    user_id BIGINT NOT NULL COMMENT '用户ID',
-    ROLE INT DEFAULT 0 COMMENT '角色: 0-普通成员, 1-管理员, 2-群主',
-    nickname VARCHAR(100) COMMENT '群内昵称',
-    join_time TIMESTAMP DEFAULT CURRENT_TIMESTAMP COMMENT '加入时间',
-    mute_until TIMESTAMP NULL COMMENT '禁言截止时间',
-    create_time TIMESTAMP DEFAULT CURRENT_TIMESTAMP COMMENT '创建时间',
-    update_time TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP COMMENT '更新时间',
-    deleted INT DEFAULT 0 COMMENT '是否删除: 0-未删除, 1-已删除',
-
-    UNIQUE KEY uk_group_user (group_id, user_id),
-    INDEX idx_group_id (group_id),
-    INDEX idx_user_id (user_id),
-    INDEX idx_role (ROLE),
-    INDEX idx_join_time (join_time),
-    INDEX idx_deleted (deleted)
-) ENGINE=INNODB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci COMMENT='群组成员表';
 
 -- 创建好友关系表
 CREATE TABLE IF NOT EXISTS friendships (
@@ -184,3 +143,91 @@ CREATE TABLE IF NOT EXISTS message_push_records (
     FOREIGN KEY (message_id) REFERENCES messages(id) ON DELETE CASCADE,
     FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
 ) ENGINE=INNODB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci COMMENT='消息推送记录表';
+
+-- 创建群组表
+CREATE TABLE IF NOT EXISTS chat_groups (
+    id BIGINT AUTO_INCREMENT PRIMARY KEY COMMENT '群组ID',
+    group_name VARCHAR(100) NOT NULL COMMENT '群组名称',
+    group_description VARCHAR(500) COMMENT '群组描述',
+    group_avatar VARCHAR(500) COMMENT '群组头像URL',
+    owner_id BIGINT NOT NULL COMMENT '群主ID',
+    max_members INT DEFAULT 200 COMMENT '最大成员数',
+    member_count INT DEFAULT 0 COMMENT '当前成员数',
+    mute_all INT DEFAULT 0 COMMENT '全员禁言: 0-否, 1-是',
+    status INT DEFAULT 1 COMMENT '群组状态: 0-解散, 1-正常, 2-冻结',
+    create_time TIMESTAMP DEFAULT CURRENT_TIMESTAMP COMMENT '创建时间',
+    update_time TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP COMMENT '更新时间',
+    deleted INT DEFAULT 0 COMMENT '是否删除: 0-未删除, 1-已删除',
+
+    INDEX idx_owner_id (owner_id),
+    INDEX idx_group_name (group_name),
+    INDEX idx_status (status),
+    INDEX idx_create_time (create_time),
+    INDEX idx_deleted (deleted),
+    FOREIGN KEY (owner_id) REFERENCES users(id) ON DELETE CASCADE
+) ENGINE=INNODB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci COMMENT='群组表';
+ADD COLUMN group_avatar_data LONGBLOB COMMENT '群头像二进制' AFTER group_avatar,
+ADD COLUMN group_avatar_content_type VARCHAR(100) COMMENT '群头像类型' AFTER group_avatar_data;
+CREATE INDEX idx_group_members_mute_until ON group_members(group_id, user_id, mute_until);
+-- 创建群成员表
+CREATE TABLE IF NOT EXISTS group_members (
+    id BIGINT AUTO_INCREMENT PRIMARY KEY COMMENT '成员关系ID',
+    group_id BIGINT NOT NULL COMMENT '群组ID',
+    user_id BIGINT NOT NULL COMMENT '用户ID',
+    member_role INT DEFAULT 1 COMMENT '成员角色: 1-普通成员, 2-管理员, 3-群主',
+    member_nickname VARCHAR(100) COMMENT '群内昵称',
+    join_time TIMESTAMP DEFAULT CURRENT_TIMESTAMP COMMENT '加入时间',
+    invite_user_id BIGINT COMMENT '邀请人ID',
+    mute_until TIMESTAMP NULL COMMENT '禁言到期时间',
+    status INT DEFAULT 1 COMMENT '成员状态: 0-已退出, 1-正常, 2-被踢出',
+    create_time TIMESTAMP DEFAULT CURRENT_TIMESTAMP COMMENT '创建时间',
+    update_time TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP COMMENT '更新时间',
+    deleted INT DEFAULT 0 COMMENT '是否删除: 0-未删除, 1-已删除',
+
+    UNIQUE KEY uk_group_user (group_id, user_id),
+    INDEX idx_group_id (group_id),
+    INDEX idx_user_id (user_id),
+    INDEX idx_member_role (member_role),
+    INDEX idx_join_time (join_time),
+    INDEX idx_status (status),
+    INDEX idx_deleted (deleted),
+    FOREIGN KEY (group_id) REFERENCES chat_groups(id) ON DELETE CASCADE,
+    FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE,
+    FOREIGN KEY (invite_user_id) REFERENCES users(id) ON DELETE SET NULL
+) ENGINE=INNODB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci COMMENT='群成员表';
+
+-- 创建群公告表
+CREATE TABLE IF NOT EXISTS group_announcements (
+    id BIGINT AUTO_INCREMENT PRIMARY KEY COMMENT '公告ID',
+    group_id BIGINT NOT NULL COMMENT '群组ID',
+    publisher_id BIGINT NOT NULL COMMENT '发布者ID',
+    title VARCHAR(200) NOT NULL COMMENT '公告标题',
+    content TEXT NOT NULL COMMENT '公告内容',
+    is_pinned INT DEFAULT 0 COMMENT '是否置顶: 0-否, 1-是',
+    status INT DEFAULT 1 COMMENT '公告状态: 0-草稿, 1-已发布, 2-已撤回',
+    publish_time TIMESTAMP DEFAULT CURRENT_TIMESTAMP COMMENT '发布时间',
+    create_time TIMESTAMP DEFAULT CURRENT_TIMESTAMP COMMENT '创建时间',
+    update_time TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP COMMENT '更新时间',
+    deleted INT DEFAULT 0 COMMENT '是否删除: 0-未删除, 1-已删除',
+
+    INDEX idx_group_id (group_id),
+    INDEX idx_publisher_id (publisher_id),
+    INDEX idx_status (status),
+    INDEX idx_is_pinned (is_pinned),
+    INDEX idx_publish_time (publish_time),
+    INDEX idx_deleted (deleted),
+    FOREIGN KEY (group_id) REFERENCES chat_groups(id) ON DELETE CASCADE,
+    FOREIGN KEY (publisher_id) REFERENCES users(id) ON DELETE CASCADE
+) ENGINE=INNODB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci COMMENT='群公告表';
+
+-- 更新会话表，添加群聊支持
+ALTER TABLE conversations ADD COLUMN group_name VARCHAR(100) COMMENT '群组名称（群聊会话）';
+ALTER TABLE conversations ADD COLUMN group_avatar VARCHAR(500) COMMENT '群组头像（群聊会话）';
+
+-- 为现有的messages表添加索引优化群聊查询
+CREATE INDEX idx_messages_group_send_time ON messages(group_id, send_time);
+CREATE INDEX idx_messages_group_status ON messages(group_id, status);
+ALTER TABLE group_members ADD COLUMN remark VARCHAR(100) NULL COMMENT '我对这个群的备注（个人可见）' AFTER member_nickname;
+CREATE INDEX idx_group_members_group_role ON group_members(group_id, member_role);
+CREATE INDEX idx_group_members_group_status ON group_members(group_id, STATUS);
+ALTER TABLE chat_groups

@@ -1,0 +1,130 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.chatapp.mapper.ChatGroupMapper">
+
+    <!-- 结果映射 -->
+    <resultMap id="ChatGroupResultMap" type="com.chatapp.entity.ChatGroup">
+        <id column="id" property="id"/>
+        <result column="group_name" property="groupName"/>
+        <result column="group_description" property="groupDescription"/>
+        <result column="group_avatar" property="groupAvatar"/>
+        <result column="group_avatar_data" property="groupAvatarData"/>
+        <result column="group_avatar_content_type" property="groupAvatarContentType"/>
+        <result column="owner_id" property="ownerId"/>
+        <result column="max_members" property="maxMembers"/>
+        <result column="member_count" property="memberCount"/>
+        <result column="mute_all" property="muteAll"/>
+        <result column="status" property="status"/>
+        <result column="create_time" property="createTime"/>
+        <result column="update_time" property="updateTime"/>
+        <result column="deleted" property="deleted"/>
+    </resultMap>
+
+    <!-- 基础字段 -->
+    <sql id="Base_Column_List">
+        id, group_name, group_description, group_avatar, group_avatar_data, group_avatar_content_type,
+        owner_id, max_members, member_count, mute_all, status, create_time, update_time, deleted
+    </sql>
+
+    <!-- 创建群组 -->
+    <insert id="insertGroup" parameterType="com.chatapp.entity.ChatGroup" useGeneratedKeys="true" keyProperty="id">
+        INSERT INTO chat_groups (
+            group_name, group_description, group_avatar, group_avatar_data, group_avatar_content_type,
+            owner_id, max_members, member_count, mute_all, status, create_time, update_time, deleted
+        ) VALUES (
+            #{groupName}, #{groupDescription}, #{groupAvatar}, #{groupAvatarData}, #{groupAvatarContentType},
+            #{ownerId}, #{maxMembers}, #{memberCount}, #{muteAll}, #{status}, #{createTime}, #{updateTime}, #{deleted}
+        )
+    </insert>
+
+    <!-- 根据ID查询群组 -->
+    <select id="selectGroupById" parameterType="long" resultMap="ChatGroupResultMap">
+        SELECT <include refid="Base_Column_List"/>
+        FROM chat_groups
+        WHERE id = #{id} AND deleted = 0
+    </select>
+
+    <!-- 根据群主ID查询群组列表 -->
+    <select id="selectGroupsByOwnerId" parameterType="long" resultMap="ChatGroupResultMap">
+        SELECT <include refid="Base_Column_List"/>
+        FROM chat_groups
+        WHERE owner_id = #{ownerId} AND deleted = 0 AND status = 1
+        ORDER BY create_time DESC
+    </select>
+
+    <!-- 查询用户加入的所有群组 -->
+    <select id="selectGroupsByUserId" parameterType="long" resultMap="ChatGroupResultMap">
+        SELECT g.*
+        FROM chat_groups g
+        INNER JOIN group_members gm ON g.id = gm.group_id
+        WHERE gm.user_id = #{userId} AND gm.status = 1 AND gm.deleted = 0
+          AND g.deleted = 0 AND g.status = 1
+        ORDER BY gm.join_time DESC
+    </select>
+
+    <!-- 更新群组信息 -->
+    <update id="updateGroup" parameterType="com.chatapp.entity.ChatGroup">
+        UPDATE chat_groups
+        SET group_name = #{groupName},
+            group_description = #{groupDescription},
+            group_avatar = #{groupAvatar},
+            max_members = #{maxMembers},
+            mute_all = #{muteAll},
+            status = #{status},
+            update_time = #{updateTime}
+        WHERE id = #{id} AND deleted = 0
+    </update>
+
+    <!-- 更新群组成员数量 -->
+    <update id="updateMemberCount">
+        UPDATE chat_groups
+        SET member_count = #{memberCount},
+            update_time = NOW()
+        WHERE id = #{groupId} AND deleted = 0
+    </update>
+
+    <!-- 删除群组（软删除） -->
+    <update id="deleteGroup">
+        UPDATE chat_groups
+        SET deleted = 1,
+            status = 0,
+            update_time = NOW()
+        WHERE id = #{id}
+    </update>
+
+    <!-- 根据群名搜索群组 -->
+    <select id="searchGroupsByName" resultMap="ChatGroupResultMap">
+        SELECT <include refid="Base_Column_List"/>
+        FROM chat_groups
+        WHERE group_name LIKE CONCAT('%', #{keyword}, '%')
+          AND deleted = 0 AND status = 1
+        ORDER BY member_count DESC, create_time DESC
+        <if test="limit != null">
+            LIMIT #{limit}
+        </if>
+    </select>
+
+    <!-- 检查群组是否存在 -->
+    <select id="existsById" parameterType="long" resultType="boolean">
+        SELECT COUNT(1) > 0
+        FROM chat_groups
+        WHERE id = #{id} AND deleted = 0
+    </select>
+
+    <!-- 获取群组头像数据 -->
+    <select id="selectGroupAvatarById" parameterType="long" resultMap="ChatGroupResultMap">
+        SELECT id, group_avatar_data, group_avatar_content_type
+        FROM chat_groups
+        WHERE id = #{id} AND deleted = 0
+    </select>
+
+    <!-- 更新群组头像 -->
+    <update id="updateGroupAvatar">
+        UPDATE chat_groups
+        SET group_avatar_data = #{avatarData},
+            group_avatar_content_type = #{contentType},
+            update_time = NOW()
+        WHERE id = #{id} AND deleted = 0
+    </update>
+
+</mapper>

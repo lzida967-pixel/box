@@ -124,8 +124,8 @@ const loadFriends = async () => {
   loading.value = true
   try {
     const response = await contactApi.getContacts()
-    console.log('好友列表API响应:', response.data)
-    // API直接返回好友数组，不是包装在data字段中
+    console.log('好友列表API响应:', response)
+    // API返回格式为 { code: number, message: string, data: User[] }
     friends.value = Array.isArray(response.data) ? response.data : []
     console.log('解析后的好友列表:', friends.value)
     // 如果之前选中的好友还在列表中，保持选中状态

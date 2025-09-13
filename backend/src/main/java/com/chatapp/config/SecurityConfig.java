@@ -56,7 +56,7 @@ public class SecurityConfig {
                 .authorizeHttpRequests(auth -> auth
                         .requestMatchers(HttpMethod.OPTIONS, "/**").permitAll() // 明确允许所有OPTIONS请求
                         .requestMatchers("/auth/**", "/contacts/**", "/api/user/list-all", "/api/user/avatar/**",
-                                "/user/avatar/**", "/api/files/**", "/ws/**", "/api/ws/**", "/api/messages/**",
+                                "/user/avatar/**", "/api/files/**", "/ws/**", "/api/ws/**", "/api/messages/**","/api/groups/**",
                                 "/images/**")
                         .permitAll()
                         .anyRequest().authenticated())

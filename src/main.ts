@@ -52,6 +52,11 @@ const routes = [
     path: '/friend-chat-test',
     component: FriendChatTest,
     meta: { requiresAuth: true }
+  },
+  {
+    path: '/group-chat-test',
+    component: () => import('./views/GroupChatTestView.vue'),
+    meta: { requiresAuth: true }
   }
 ]
 

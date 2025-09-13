@@ -314,6 +314,13 @@ export const contactApi = {
   },
 
   /**
+   * 获取好友列表
+   */
+  getFriends: (): Promise<AxiosResponse<ApiResponse<any[]>>> => {
+    return api.get('/contacts/friends')
+  },
+
+  /**
    * 删除联系人
    */
   removeContact: (userId: string): Promise<AxiosResponse<ApiResponse<void>>> => {
@@ -339,6 +346,13 @@ export const contactApi = {
    */
   deleteAvatar: (userId: string): Promise<AxiosResponse<ApiResponse<void>>> => {
     return api.delete(`/user/avatar/${userId}`)
+  },
+
+  /**
+   * 获取不在指定群内的好友列表
+   */
+  getFriendsNotInGroup: (groupId: number): Promise<AxiosResponse<ApiResponse<any[]>>> => {
+    return api.get(`/contacts/friends/not-in-group/${groupId}`)
   }
 }
 
@@ -374,6 +388,159 @@ export const imageApi = {
   url: (id: string | number) => `http://localhost:8080/api/images/${id}`
 }
 
+// ==================== 群聊相关API ====================
+
+export const groupApi = {
+  /**
+   * 获取用户的群聊列表
+   */
+  getUserGroups: (): Promise<AxiosResponse<ApiResponse<any[]>>> => {
+    return api.get('/group/user-groups')
+  },
+
+  /**
+   * 创建群聊
+   */
+  createGroup: (groupData: any): Promise<AxiosResponse<ApiResponse<any>>> => {
+    return api.post('/group/create', groupData)
+  },
+
+  /**
+   * 获取群聊详情
+   */
+  getGroupDetail: (groupId: number): Promise<AxiosResponse<ApiResponse<any>>> => {
+    return api.get(`/group/${groupId}`)
+  },
+
+  /**
+   * 获取群成员列表
+   */
+  getGroupMembers: (groupId: number): Promise<AxiosResponse<ApiResponse<any[]>>> => {
+    return api.get(`/group/${groupId}/members`)
+  },
+
+  /**
+   * 邀请成员加入群聊
+   */
+  inviteMembers: (groupId: number, memberIds: number[]): Promise<AxiosResponse<ApiResponse<void>>> => {
+    return api.post(`/group/${groupId}/invite`, { memberIds })
+  },
+
+  /**
+   * 移除群成员
+   */
+  removeMembers: (groupId: number, memberIds: number[]): Promise<AxiosResponse<ApiResponse<void>>> => {
+    return api.post(`/group/${groupId}/remove`, { memberIds })
+  },
+
+  /**
+   * 移除单个群成员
+   */
+  removeMember: (groupId: number, memberId: number): Promise<AxiosResponse<ApiResponse<void>>> => {
+    return api.delete(`/group/${groupId}/member/${memberId}`)
+  },
+
+  /**
+   * 禁言成员
+   */
+  muteMembers: (groupId: number, memberIds: number[], duration: number): Promise<AxiosResponse<ApiResponse<void>>> => {
+    return api.post(`/group/${groupId}/mute`, { memberIds, duration })
+  },
+
+  /**
+   * 禁言单个成员
+   */
+  muteMember: (groupId: number, memberId: number, duration: number): Promise<AxiosResponse<ApiResponse<void>>> => {
+    return api.post(`/group/${groupId}/mute/${memberId}`, { duration })
+  },
+
+  /**
+   * 解除禁言
+   */
+  unmuteMembers: (groupId: number, memberIds: number[]): Promise<AxiosResponse<ApiResponse<void>>> => {
+    return api.post(`/group/${groupId}/unmute`, { memberIds })
+  },
+
+  /**
+   * 解除单个成员禁言
+   */
+  unmuteMember: (groupId: number, memberId: number): Promise<AxiosResponse<ApiResponse<void>>> => {
+    return api.delete(`/group/${groupId}/mute/${memberId}`)
+  },
+
+  /**
+   * 更新成员角色
+   */
+  updateMemberRole: (groupId: number, memberId: number, role: string): Promise<AxiosResponse<ApiResponse<void>>> => {
+    return api.put(`/group/${groupId}/member/${memberId}/role`, { role })
+  },
+
+  /**
+   * 更新群昵称
+   */
+  updateMemberNickname: (groupId: number, nickname: string): Promise<AxiosResponse<ApiResponse<void>>> => {
+    return api.put(`/group/${groupId}/nickname`, { nickname })
+  },
+
+  /**
+   * 更新群备注
+   */
+  updateGroupRemark: (groupId: number, remark: string): Promise<AxiosResponse<ApiResponse<void>>> => {
+    return api.put(`/group/${groupId}/remark`, { remark })
+  },
+
+  /**
+   * 退出群聊
+   */
+  leaveGroup: (groupId: number): Promise<AxiosResponse<ApiResponse<void>>> => {
+    return api.post(`/group/${groupId}/leave`)
+  },
+
+  /**
+   * 解散群聊
+   */
+  dissolveGroup: (groupId: number): Promise<AxiosResponse<ApiResponse<void>>> => {
+    return api.delete(`/group/${groupId}`)
+  },
+
+  /**
+   * 更新群信息
+   */
+  updateGroup: (groupId: number, groupData: any): Promise<AxiosResponse<ApiResponse<any>>> => {
+    return api.put(`/group/${groupId}`, groupData)
+  },
+
+  /**
+   * 上传群头像
+   */
+  uploadAvatar: (groupId: number, file: File): Promise<AxiosResponse<ApiResponse<string>>> => {
+    const formData = new FormData()
+    formData.append('avatar', file)
+    return api.post(`/group/${groupId}/avatar`, formData)
+  },
+
+  /**
+   * 检查是否为群成员
+   */
+  isGroupMember: (groupId: number, userId: number): Promise<AxiosResponse<ApiResponse<boolean>>> => {
+    return api.get(`/group/${groupId}/member/${userId}/check`)
+  },
+
+  /**
+   * 检查成员是否被禁言
+   */
+  isMemberMuted: (groupId: number, userId: number): Promise<AxiosResponse<ApiResponse<boolean>>> => {
+    return api.get(`/group/${groupId}/member/${userId}/muted`)
+  },
+
+  /**
+   * 获取群成员ID列表
+   */
+  getGroupMemberIds: (groupId: number): Promise<AxiosResponse<ApiResponse<number[]>>> => {
+    return api.get(`/group/${groupId}/member-ids`)
+  }
+}
+
 // ==================== 系统相关API ====================
 
 export const systemApi = {
@@ -398,6 +565,7 @@ export default {
   user: userApi,
   chat: chatApi,
   contact: contactApi,
+  group: groupApi,
   file: fileApi,
   image: imageApi,
   system: systemApi

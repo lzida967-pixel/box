@@ -1,6 +1,7 @@
 package com.chatapp.config;
 
 import com.chatapp.entity.Message;
+import com.chatapp.service.GroupService;
 import com.chatapp.service.MessageService;
 import com.chatapp.service.OfflineMessageService;
 import com.chatapp.service.WebSocketSessionService;
@@ -38,6 +39,9 @@ public class ChatWebSocketHandler extends TextWebSocketHandler {
 
     @Autowired
     private OfflineMessageService offlineMessageService;
+
+    @Autowired
+    private GroupService groupService;
 
     @Override
     public void afterConnectionEstablished(WebSocketSession session) throws Exception {
@@ -151,6 +155,18 @@ public class ChatWebSocketHandler extends TextWebSocketHandler {
             Integer messageType = data.get("messageType") != null ? 
                 Integer.valueOf(data.get("messageType").toString()) : 1;
 
+            // 检查用户是否是群成员
+            if (!groupService.isGroupMember(groupId, fromUserId)) {
+                logger.warn("用户 {} 不是群 {} 的成员，无法发送消息", fromUserId, groupId);
+                return;
+            }
+
+            // 检查用户是否被禁言
+            if (groupService.isMemberMuted(groupId, fromUserId)) {
+                logger.warn("用户 {} 在群 {} 中被禁言，无法发送消息", fromUserId, groupId);
+                return;
+            }
+
             // 保存消息到数据库
             Message message = messageService.sendGroupMessage(fromUserId, groupId, content, messageType);
 
@@ -162,9 +178,22 @@ public class ChatWebSocketHandler extends TextWebSocketHandler {
             response.put("message", message);
             response.put("timestamp", System.currentTimeMillis());
 
-            // TODO: 获取群成员列表并发送给所有在线成员
-            // 暂时只发送给发送者作为确认
-            sessionService.sendToUser(fromUserId, response);
+            // 获取群成员列表并发送给所有在线成员
+            try {
+                var memberIds = groupService.getGroupMemberIds(groupId);
+                for (Long memberId : memberIds) {
+                    if (sessionService.isUserOnline(memberId)) {
+                        sessionService.sendToUser(memberId, response);
+                    } else {
+                        // 为离线成员推送离线消息
+                        offlineMessageService.pushMessageToUser(memberId, message);
+                    }
+                }
+            } catch (Exception e) {
+                logger.error("广播群聊消息失败", e);
+                // 至少发送给发送者作为确认
+                sessionService.sendToUser(fromUserId, response);
+            }
 
             logger.debug("群聊消息发送成功: 用户{} -> 群{}", fromUserId, groupId);
         } catch (Exception e) {

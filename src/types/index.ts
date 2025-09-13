@@ -12,6 +12,7 @@ export interface User {
   status?: number // 后端使用数字状态
   gender?: number // 性别: 0-未知, 1-男, 2-女
   name?: string // 显示名称（兼容字段）
+  remark?: string // 用户备注
 }
 
 // 好友关系
@@ -121,6 +122,71 @@ export interface Conversation {
   type: 'private' | 'group'
   name?: string
   avatar?: string
+}
+
+// ==================== 群聊相关类型 ====================
+
+// 群聊信息
+export interface ChatGroup {
+  id: number
+  name: string
+  groupName?: string // 后端返回的群组名称字段
+  description?: string
+  avatar?: string
+  ownerId: number
+  ownerName?: string // 群主名称
+  maxMembers: number
+  isPrivate: boolean
+  memberCount: number
+  announcement?: string
+  remark?: string
+  createdAt: string
+  updatedAt: string
+  lastMessage?: Message
+  lastMessageTime?: Date | string
+  unreadCount?: number
+  myNickname?: string // 当前用户在群内的昵称
+}
+
+// 群成员
+export interface GroupMember {
+  id: number
+  groupId: number
+  userId: number
+  role: 'OWNER' | 'ADMIN' | 'MEMBER'
+  nickname?: string
+  joinedAt: string
+  isMuted: boolean
+  mutedUntil?: string
+  user?: User
+}
+
+// 群公告
+export interface GroupAnnouncement {
+  id: number
+  groupId: number
+  content: string
+  createdBy: number
+  createdAt: string
+  creator?: User
+}
+
+// 创建群聊请求
+export interface CreateGroupRequest {
+  name: string
+  description?: string
+  avatar?: string
+  isPrivate: boolean
+  maxMembers: number
+  memberIds: number[]
+}
+
+// 群聊DTO
+export interface GroupDTO {
+  group: ChatGroup
+  members: GroupMember[]
+  announcement?: GroupAnnouncement
+  currentUserRole?: 'OWNER' | 'ADMIN' | 'MEMBER'
 }
 
 // ==================== API响应类型 ====================

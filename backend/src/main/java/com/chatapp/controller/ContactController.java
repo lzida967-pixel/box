@@ -40,6 +40,7 @@ public class ContactController {
      * 获取当前用户的好友列表
      */
     @GetMapping
+
     public ResponseEntity<?> getContacts() {
         try {
             Long currentUserId = getCurrentUserId();
@@ -276,6 +277,38 @@ public class ContactController {
         response.put("message", message);
         response.put("data", null);
         return response;
+    }
+
+    /**
+     * 获取好友列表（用于邀请成员等场景）
+     */
+    @GetMapping("/friends")
+    public ResponseEntity<?> getFriends() {
+        try {
+            Long currentUserId = getCurrentUserId();
+            List<User> friends = friendshipService.getFriends(currentUserId);
+
+            return ResponseEntity.ok(createSuccessResponse("获取好友列表成功", friends));
+        } catch (Exception e) {
+            return ResponseEntity.badRequest()
+                    .body(createErrorResponse(400, e.getMessage()));
+        }
+    }
+
+    /**
+     * 获取不在指定群内的好友列表（用于邀请群成员）
+     */
+    @GetMapping("/friends/not-in-group/{groupId}")
+    public ResponseEntity<?> getFriendsNotInGroup(@PathVariable Long groupId) {
+        try {
+            Long currentUserId = getCurrentUserId();
+            List<User> friends = friendshipService.getFriendsNotInGroup(currentUserId, groupId);
+
+            return ResponseEntity.ok(createSuccessResponse("获取可邀请好友列表成功", friends));
+        } catch (Exception e) {
+            return ResponseEntity.badRequest()
+                    .body(createErrorResponse(400, e.getMessage()));
+        }
     }
 
     /**

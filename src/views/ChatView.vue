@@ -135,14 +135,10 @@
 
       <!-- 群组列表 -->
       <div v-else-if="activeTab === 'groups'" class="groups-list">
-        <div class="section-title">我的群组</div>
-        <div class="group-item">
-          <el-avatar :size="40" class="group-avatar">群</el-avatar>
-          <div class="group-info">
-            <div class="group-name">示例群组</div>
-            <div class="group-member-count">5人</div>
-          </div>
-        </div>
+        <GroupsPage 
+          @start-group-chat="startGroupChat" 
+          @group-selected="handleGroupSelected" 
+        />
       </div>
     </div>
 
@@ -210,6 +206,20 @@
           </div>
           <div class="detail-content" v-else>
             <el-empty description="请选择好友查看详情" />
+          </div>
+        </div>
+      </template>
+
+      <!-- 群聊页面显示群聊详情 -->
+      <template v-else-if="activeTab === 'groups'">
+        <div class="group-detail-panel">
+          <GroupDetailPanel 
+            v-if="selectedGroup"
+            :group="selectedGroup"
+            @start-chat="startGroupChat"
+          />
+          <div v-else class="detail-content">
+            <el-empty description="请选择群聊查看详情" />
           </div>
         </div>
       </template>
@@ -286,13 +296,15 @@ import ElMessageBox from 'element-plus/es/components/message-box/index.mjs'
 import { Edit } from '@element-plus/icons-vue'
 import { useAuthStore } from '@/stores/auth'
 import { useChatStore } from '@/stores/chat'
-import { contactApi } from '@/api'
+import { contactApi, groupApi } from '@/api'
 import ChatInterface from '@/components/ChatInterface.vue'
 import ContactSelector from '@/components/ContactSelector.vue'
 import ContactInfo from '@/components/ContactInfo.vue'
 import SettingsDialog from '@/components/SettingsDialog.vue'
 import FriendsPage from '@/components/FriendsPage.vue'
-import type { User, Conversation, Message } from '@/types'
+import GroupsPage from '@/components/GroupsPage.vue'
+import GroupDetailPanel from '@/components/GroupDetailPanel.vue'
+import type { User, Conversation, Message, ChatGroup } from '@/types'
 import dayjs from 'dayjs'
 
 const router = useRouter()
@@ -519,6 +531,98 @@ const handleFriendSelected = (friend: User) => {
   // 调试：输出好友数据查看包含的字段
   console.log('选中的好友数据:', friend)
   // 只设置选中状态，不自动开始聊天
+}
+
+// 群聊相关状态和方法
+const selectedGroup = ref<ChatGroup | null>(null)
+
+// 处理群聊选中事件
+const handleGroupSelected = async (group: ChatGroup) => {
+  try {
+    // 调用后端接口获取完整的群组详情
+    const response = await groupApi.getGroupDetail(group.id)
+    // 检查响应数据格式 - 直接包含群组数据对象
+    if (response.data && response.data.id) {
+      // 将后端返回的 GroupDTO 转换为前端需要的 ChatGroup 格式
+      const groupDetail = response.data
+      const fullGroup: ChatGroup = {
+        id: groupDetail.id,
+        name: groupDetail.groupName,
+        groupName: groupDetail.groupName, // 保存原始 groupName
+        description: groupDetail.groupDescription,
+        avatar: groupDetail.groupAvatar,
+        ownerId: groupDetail.ownerId,
+        ownerName: groupDetail.ownerName,
+        maxMembers: groupDetail.maxMembers || 200,
+        isPrivate: groupDetail.status === 2,
+        memberCount: groupDetail.memberCount || 1,
+        remark: groupDetail.myRemark || groupDetail.groupName,
+        announcement: groupDetail.latestAnnouncement,
+        createdAt: groupDetail.createTime ? new Date(groupDetail.createTime).toISOString() : new Date().toISOString(),
+        updatedAt: groupDetail.createTime ? new Date(groupDetail.createTime).toISOString() : new Date().toISOString(),
+        // 添加 myNickname 作为扩展属性，供 GroupDetailPanel 使用
+        myNickname: groupDetail.myNickname
+      }
+      selectedGroup.value = fullGroup
+      console.log('完整的群聊详情数据:', fullGroup)
+    } else {
+      console.error('获取群组详情失败:', response.data)
+      console.error('响应状态码:', response.data.code)
+      console.error('响应消息:', response.data.message)
+      selectedGroup.value = group // 使用原始数据作为后备
+    }
+  } catch (error) {
+    console.error('获取群组详情出错:', error)
+    selectedGroup.value = group // 使用原始数据作为后备
+  }
+}
+
+// 开始群聊
+const startGroupChat = async (group: ChatGroup) => {
+  console.log('开始群聊:', group)
+  
+  // 检查用户登录状态
+  if (!authStore.isLoggedIn || !authStore.userInfo) {
+    console.error('用户未登录或用户信息缺失')
+    return
+  }
+  
+  try {
+    // 创建群聊会话ID（使用group_前缀区分群聊和私聊）
+    const conversationId = `group_${group.id}`
+    
+    // 检查是否已存在该群聊会话
+    let conversation = chatStore.conversations.find(c => c.id === conversationId)
+    
+    if (!conversation) {
+      // 创建新的群聊会话
+      conversation = {
+        id: conversationId,
+        type: 'group',
+        participantIds: [], // 群聊的参与者ID列表
+        name: group.name,
+        avatar: group.avatar,
+        lastMessage: undefined,
+        unreadCount: 0,
+        timestamp: new Date()
+      }
+      
+      // 添加到会话列表
+      chatStore.conversations.push(conversation)
+    }
+    
+    // 设置为活动会话
+    await chatStore.setActiveConversation(conversationId)
+    console.log('设置活动群聊会话:', conversationId)
+    
+    // 切换到消息标签页
+    activeTab.value = 'messages'
+    console.log('切换到消息标签页显示群聊')
+    
+  } catch (error) {
+    console.error('开始群聊失败:', error)
+    ElMessage.error('开始群聊失败')
+  }
 }
 
 // 显示删除好友确认对话框

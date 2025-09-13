@@ -100,4 +100,12 @@ public interface FriendshipService {
      * @return 好友关系
      */
     Optional<Friendship> getFriendship(Long userId, Long friendId);
+
+    /**
+     * 获取不在指定群内的好友列表
+     * @param userId 用户ID
+     * @param groupId 群组ID
+     * @return 不在群内的好友列表
+     */
+    List<User> getFriendsNotInGroup(Long userId, Long groupId);
 }
