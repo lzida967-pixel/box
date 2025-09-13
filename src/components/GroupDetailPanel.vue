@@ -35,9 +35,25 @@
       <!-- 群基本信息 -->
       <div class="group-info-section">
         <div class="avatar-section">
-          <el-avatar :src="getGroupAvatar(group)" :size="80">
-            {{ (group?.name || group?.groupName)?.charAt(0) }}
-          </el-avatar>
+          <div class="avatar-with-upload">
+            <el-avatar :src="getGroupAvatar(group)" :size="80">
+              {{ (group?.name || group?.groupName)?.charAt(0) }}
+            </el-avatar>
+            <el-upload
+              v-if="canManage"
+              class="avatar-upload-btn"
+              :action="uploadUrl"
+              :headers="uploadHeaders"
+              :show-file-list="false"
+              :before-upload="beforeAvatarUpload"
+              :on-success="handleAvatarSuccess"
+              accept="image/*"
+            >
+              <el-button size="small" circle>
+                <el-icon><Edit /></el-icon>
+              </el-button>
+            </el-upload>
+          </div>
         </div>
         
         <div class="info-section">
@@ -291,6 +307,39 @@ const currentMember = computed(() => {
   return member
 })
 
+// 头像上传相关
+const uploadUrl = computed(() => `http://localhost:8080/api/group/${props.group?.id}/avatar`)
+const uploadHeaders = computed(() => ({
+  Authorization: `Bearer ${authStore.currentUser?.token || ''}`
+}))
+
+const beforeAvatarUpload = (file: any) => {
+  const isImage = file.type.startsWith('image/')
+  const isLt2M = file.size / 1024 / 1024 < 2
+
+  if (!isImage) {
+    ElMessage.error('只能上传图片文件!')
+    return false
+  }
+  if (!isLt2M) {
+    ElMessage.error('图片大小不能超过 2MB!')
+    return false
+  }
+  return true
+}
+
+const handleAvatarSuccess = (response: any) => {
+  if (response.code === 200 && response.data) {
+    // 更新群组头像
+    if (props.group) {
+      props.group.avatar = response.data.url || response.data
+    }
+    ElMessage.success(response.message || '头像上传成功')
+  } else {
+    ElMessage.error(response.message || '头像上传失败')
+  }
+}
+
 const isOwner = computed(() => {
   // 优先使用群组数据中的 ownerId 进行判断
   const groupOwnerId = props.group?.ownerId
@@ -315,16 +364,18 @@ const isOwner = computed(() => {
 
 const canManage = computed(() => {
   // 主要根据群组详情中的 ownerId 判断是否可以管理
-  const isOwner = props.group?.ownerId === authStore.userInfo?.id
-  console.log('权限判断 - 群主ID:', props.group?.ownerId, '当前用户ID:', authStore.userInfo?.id, '是群主:', isOwner)
+  const currentUserId = authStore.userInfo?.id
+  const groupOwnerId = props.group?.ownerId
+  // 使用宽松比较，避免数据类型不匹配问题
+  const isOwner = groupOwnerId == currentUserId
   
   // 如果是群主，可以直接管理
   if (isOwner) return true
   
   // 如果不是群主，再检查成员列表中的管理员权限（2表示管理员）
   if (currentMember.value) {
-    const isAdmin = currentMember.value?.memberRole === 2
-    console.log('管理员检查 - 当前成员角色:', currentMember.value?.memberRole, '是管理员:', isAdmin)
+    const memberRole = currentMember.value?.memberRole
+    const isAdmin = memberRole === 2
     return isAdmin
   }
   
@@ -807,5 +858,29 @@ const handleSaveChanges = async () => {
 .group-detail-panel::-webkit-scrollbar-thumb:hover,
 .members-list::-webkit-scrollbar-thumb:hover {
   background: #bfbfbf;
+}
+
+/* 头像上传样式 */
+.avatar-with-upload {
+  position: relative;
+  display: inline-block;
+}
+
+.avatar-upload-btn {
+  position: absolute;
+  bottom: 0;
+  right: 0;
+  transform: translate(50%, 50%);
+}
+
+.avatar-upload-btn .el-button {
+  background-color: #409eff;
+  color: white;
+  border: 2px solid white;
+  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+}
+
+.avatar-upload-btn .el-button:hover {
+  background-color: #66b1ff;
 }
 </style>

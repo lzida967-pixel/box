@@ -13,28 +13,7 @@
       label-width="80px"
       class="group-form"
     >
-      <!-- 群头像 -->
-      <el-form-item label="群头像">
-        <div class="avatar-upload">
-          <el-upload
-            class="avatar-uploader"
-            :action="uploadUrl"
-            :headers="uploadHeaders"
-            :show-file-list="false"
-            :on-success="handleAvatarSuccess"
-            :before-upload="beforeAvatarUpload"
-            accept="image/*"
-          >
-            <div class="avatar-container">
-              <el-avatar v-if="form.avatar" :src="form.avatar" :size="80" />
-              <div v-else class="avatar-placeholder">
-                <el-icon><Plus /></el-icon>
-                <div class="upload-text">上传头像</div>
-              </div>
-            </div>
-          </el-upload>
-        </div>
-      </el-form-item>
+
 
       <!-- 群名称 -->
       <el-form-item label="群名称" prop="name">
@@ -117,7 +96,7 @@
 
 <script setup lang="ts">
 import { ref, computed, watch } from 'vue'
-import { ElMessage, type FormInstance, type UploadProps } from 'element-plus'
+import { ElMessage, type FormInstance } from 'element-plus'
 import { Plus, Close } from '@element-plus/icons-vue'
 import { useAuthStore } from '@/stores/auth'
 import { groupApi } from '@/api'
@@ -154,10 +133,7 @@ const dialogVisible = computed({
   set: (value) => emit('update:modelValue', value)
 })
 
-const uploadUrl = computed(() => 'http://localhost:8080/api/group/avatar')
-const uploadHeaders = computed(() => ({
-  'Authorization': `Bearer ${authStore.token}`
-}))
+
 
 // 表单验证规则
 const rules = {
@@ -217,29 +193,7 @@ const handleSubmit = async () => {
   }
 }
 
-const handleAvatarSuccess: UploadProps['onSuccess'] = (response) => {
-  if (response.success) {
-    form.value.avatar = response.data.url
-    ElMessage.success('头像上传成功')
-  } else {
-    ElMessage.error(response.message || '头像上传失败')
-  }
-}
 
-const beforeAvatarUpload: UploadProps['beforeUpload'] = (file) => {
-  const isImage = file.type.startsWith('image/')
-  const isLt2M = file.size / 1024 / 1024 < 2
-
-  if (!isImage) {
-    ElMessage.error('只能上传图片文件!')
-    return false
-  }
-  if (!isLt2M) {
-    ElMessage.error('图片大小不能超过 2MB!')
-    return false
-  }
-  return true
-}
 
 const handleFriendsSelected = (friends: User[]) => {
   selectedFriends.value = friends
