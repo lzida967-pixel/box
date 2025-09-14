@@ -335,7 +335,15 @@ const totalUnreadCount = computed(() => {
 
 const getContactName = (conversation: Conversation) => {
   const contact = chatStore.getConversationContact(conversation)
-  return contact?.name || contact?.nickname || contact?.username || '未知联系人'
+  
+  // 检查是否是群聊会话
+  if (conversation.id?.startsWith('group_')) {
+    // 群聊显示名称优先级：群名称 > 群ID
+    return contact?.name || contact?.groupName || `群聊 ${contact?.id}` || '未知群聊'
+  }
+  
+  // 私聊显示名称优先级：备注 > 昵称 > 用户名
+  return contact?.name || contact?.remark || contact?.nickname || contact?.username || '未知联系人'
 }
 
 const getContactAvatar = (conversation: Conversation) => {
@@ -600,15 +608,21 @@ const startGroupChat = async (group: ChatGroup) => {
         id: conversationId,
         type: 'group',
         participantIds: [], // 群聊的参与者ID列表
-        name: group.name,
-        avatar: group.avatar,
+        name: group.name || group.groupName || `群聊 ${group.id}`,
+        avatar: group.avatar || group.groupAvatar || '',
+        description: group.description || group.groupDescription || '',
+        memberCount: group.memberCount || 1,
+        ownerId: group.ownerId,
         lastMessage: undefined,
         unreadCount: 0,
-        timestamp: new Date()
+        timestamp: new Date(),
+        // 保存完整的群组信息，以便在界面上显示
+        groupInfo: group
       }
       
       // 添加到会话列表
-      chatStore.conversations.push(conversation)
+      chatStore.conversations.unshift(conversation) // 使用unshift将新会话添加到列表顶部
+      chatStore.messages[conversationId] = [] // 初始化消息数组
     }
     
     // 设置为活动会话
@@ -618,6 +632,9 @@ const startGroupChat = async (group: ChatGroup) => {
     // 切换到消息标签页
     activeTab.value = 'messages'
     console.log('切换到消息标签页显示群聊')
+    
+    // 加载群聊历史记录
+    await chatStore.loadGroupChatHistory(group.id)
     
   } catch (error) {
     console.error('开始群聊失败:', error)
@@ -745,25 +762,83 @@ onMounted(async () => {
     await chatStore.initializeUserData(currentUser.id)
   }
   
-  // 处理路由参数，从好友详情跳转时自动开始聊天
-  const friendId = route.query.friendId as string
-  const friendName = route.query.friendName as string
+  // 处理路由参数
+  // 检查是否有路由参数指定聊天类型和ID
+  const chatType = route.params.type as string
+  const chatId = route.params.id as string
   
-  if (friendId) {
-    // 模拟好友对象
-    const friend: User = {
-      id: parseInt(friendId), // 这里保持数字类型，handleSelectContact会转换为字符串
-      username: friendName || '好友',
-      nickname: friendName || '好友',
-      status: 1 // 在线状态
-    }
+  if (chatType && chatId) {
+    console.log('路由参数:', { chatType, chatId })
     
-    // 延迟执行以确保聊天存储已初始化
-    setTimeout(() => {
-      handleSelectContact(friend)
-      // 切换到消息标签页
-      activeTab.value = 'messages'
-    }, 100)
+    // 根据类型处理不同的聊天启动方式
+    if (chatType === 'group') {
+      // 群聊类型
+      const groupId = parseInt(chatId)
+      if (!isNaN(groupId)) {
+        console.log('从路由启动群聊:', groupId)
+        // 获取群组信息
+        try {
+          const response = await groupApi.getGroupDetail(groupId)
+          if (response.data && response.data.code === 200 && response.data.data) {
+            const group = response.data.data
+            // 启动群聊
+            startGroupChat({
+              id: group.id,
+              name: group.groupName,
+              groupName: group.groupName,
+              description: group.groupDescription,
+              avatar: group.groupAvatar,
+              ownerId: group.ownerId,
+              maxMembers: group.maxMembers || 200,
+              memberCount: group.memberCount || 1,
+              isPrivate: group.status === 2
+            })
+          }
+        } catch (error) {
+          console.error('获取群组信息失败:', error)
+        }
+      }
+    } else if (chatType === 'friend') {
+      // 好友聊天类型
+      const friendId = chatId
+      const friendName = route.query.friendName as string
+      
+      // 模拟好友对象
+      const friend: User = {
+        id: parseInt(friendId), // 这里保持数字类型，handleSelectContact会转换为字符串
+        username: friendName || '好友',
+        nickname: friendName || '好友',
+        status: 1 // 在线状态
+      }
+      
+      // 延迟执行以确保聊天存储已初始化
+      setTimeout(() => {
+        handleSelectContact(friend)
+        // 切换到消息标签页
+        activeTab.value = 'messages'
+      }, 100)
+    }
+  } else {
+    // 处理旧版路由参数，从好友详情跳转时自动开始聊天
+    const friendId = route.query.friendId as string
+    const friendName = route.query.friendName as string
+    
+    if (friendId) {
+      // 模拟好友对象
+      const friend: User = {
+        id: parseInt(friendId), // 这里保持数字类型，handleSelectContact会转换为字符串
+        username: friendName || '好友',
+        nickname: friendName || '好友',
+        status: 1 // 在线状态
+      }
+      
+      // 延迟执行以确保聊天存储已初始化
+      setTimeout(() => {
+        handleSelectContact(friend)
+        // 切换到消息标签页
+        activeTab.value = 'messages'
+      }, 100)
+    }
   }
 })
 </script>

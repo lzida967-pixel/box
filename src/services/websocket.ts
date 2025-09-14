@@ -231,8 +231,27 @@ export class WebSocketService {
    * 处理群聊消息
    */
   private handleGroupMessage(message: any): void {
-    // TODO: 实现群聊消息处理
+    const chatStore = useChatStore()
+    const authStore = useAuthStore()
+    
     console.log('收到群聊消息:', message)
+    
+    // 获取当前用户ID
+    const currentUserId = authStore.userInfo?.id
+    if (!currentUserId) {
+      console.warn('当前用户未登录，忽略群聊消息')
+      return
+    }
+    
+    // 检查消息格式
+    const groupId = message.groupId || message.message?.groupId
+    if (!groupId) {
+      console.warn('收到无效的群聊消息格式:', message)
+      return
+    }
+    
+    // 将消息传递给聊天存储进行处理
+    chatStore.handleWebSocketGroupMessage(message)
   }
 
   /**

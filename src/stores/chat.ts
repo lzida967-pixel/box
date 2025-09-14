@@ -53,6 +53,20 @@ export const useChatStore = defineStore('chat', {
     // 获取会话对应的联系人
     getConversationContact: (state: ChatState) => {
       return (conversation: Conversation) => {
+        // 如果是群聊会话，直接返回群组信息
+        if (conversation.id.startsWith('group_')) {
+          // 返回群组信息，包含群名称、头像等
+          return conversation.groupInfo || {
+            id: conversation.id.replace('group_', ''),
+            name: conversation.name,
+            avatar: conversation.avatar,
+            description: conversation.description,
+            memberCount: conversation.memberCount,
+            ownerId: conversation.ownerId
+          }
+        }
+        
+        // 私聊会话处理逻辑
         const authStore = useAuthStore()
         const currentUserId = authStore.userInfo?.id
         const currentUserIdStr = currentUserId?.toString()
@@ -87,6 +101,13 @@ export const useChatStore = defineStore('chat', {
           // 显示有消息的会话，或者当前活跃的会话（即使没有消息）
           const hasMessages = state.messages[conv.id] && state.messages[conv.id].length > 0
           const isActiveConversation = conv.id === state.activeConversationId
+          
+          // 群聊会话处理
+          if (conv.id.startsWith('group_')) {
+            return true // 始终显示群聊会话
+          }
+          
+          // 私聊会话处理
           return conv.participantIds.includes(currentUserId.toString()) && (hasMessages || isActiveConversation)
         })
         .sort((a: Conversation, b: Conversation) => {
@@ -518,24 +539,59 @@ export const useChatStore = defineStore('chat', {
       const conversation = (this as any).activeConversation
       if (!conversation) return
 
-      const receiverId = conversation.participantIds.find((id: string) => id !== currentUser.id.toString())
-      if (!receiverId) return
-
-      // 通过WebSocket发送消息
-      const wsService = getWebSocketService()
-      wsService.sendPrivateMessage(parseInt(receiverId), content)
-
       // 创建本地消息对象（乐观更新）
-      const message: Message = {
-        id: Date.now(), // 临时ID，服务器会返回真实ID
-        senderId: currentUser.id,
-        receiverId: parseInt(receiverId),
-        content,
-        messageType: 'text',
-        status: 'sending',
-        createTime: new Date().toISOString(),
-        updateTime: new Date().toISOString(),
-        isRecalled: false
+      let message: Message
+      
+      // 检查是否是群聊会话
+      if (conversation.type === 'group') {
+        // 从会话ID中提取群ID
+        const groupId = parseInt((this as any).activeConversationId.replace('group_', ''))
+        if (isNaN(groupId)) {
+          console.error('无效的群ID:', (this as any).activeConversationId)
+          return
+        }
+        
+        // 通过WebSocket发送群聊消息
+        const wsService = getWebSocketService()
+        wsService.sendGroupMessage(groupId, content)
+        
+        // 创建群聊消息对象
+        message = {
+          id: Date.now(), // 临时ID，服务器会返回真实ID
+          senderId: currentUser.id,
+          groupId: groupId,
+          content,
+          messageType: 'text',
+          status: 'sending',
+          createTime: new Date().toISOString(),
+          updateTime: new Date().toISOString(),
+          isRecalled: false
+        }
+        
+        console.log('发送群聊消息:', { groupId, content })
+      } else {
+        // 私聊消息处理
+        const receiverId = conversation.participantIds.find((id: string) => id !== currentUser.id.toString())
+        if (!receiverId) return
+        
+        // 通过WebSocket发送私聊消息
+        const wsService = getWebSocketService()
+        wsService.sendPrivateMessage(parseInt(receiverId), content)
+        
+        // 创建私聊消息对象
+        message = {
+          id: Date.now(), // 临时ID，服务器会返回真实ID
+          senderId: currentUser.id,
+          receiverId: parseInt(receiverId),
+          content,
+          messageType: 'text',
+          status: 'sending',
+          createTime: new Date().toISOString(),
+          updateTime: new Date().toISOString(),
+          isRecalled: false
+        }
+        
+        console.log('发送私聊消息:', { receiverId, content })
       }
 
       // 添加到本地消息列表
@@ -579,40 +635,58 @@ export const useChatStore = defineStore('chat', {
       // 确定会话ID
       let conversationId: string | null = null
       
-      // 查找现有会话
-      const existingConv = (this as any).conversations.find((conv: Conversation) => {
-        return conv.participantIds.includes(senderIdStr) &&
-               conv.participantIds.includes(receiverIdStr)
-      })
-
-      if (existingConv) {
-        conversationId = existingConv.id
+      // 处理群聊消息
+      if (message.groupId) {
+        // 群聊消息使用群组ID查找会话
+        const groupConversationId = `group_${message.groupId}`
+        const existingGroupConv = (this as any).conversations.find((conv: Conversation) => 
+          conv.id === groupConversationId
+        )
         
-        // 检查消息是否已存在（避免重复添加）
-        const existingMessages = (this as any).messages[conversationId] || []
-        const messageExists = existingMessages.some((msg: Message) => msg.id === message.id)
-        if (messageExists) {
-          console.log('消息已存在，跳过添加:', message.id)
-          return
+        if (existingGroupConv) {
+          conversationId = existingGroupConv.id
+        } else {
+          // 如果群聊会话不存在，创建新的群聊会话
+          const newGroupConversation: Conversation = {
+            id: groupConversationId,
+            participantIds: [currentUserIdStr], // 初始只包含当前用户
+            unreadCount: 0,
+            timestamp: new Date(message.createTime),
+            type: 'group',
+            name: `群聊 ${message.groupId}`
+          }
+          ; (this as any).conversations.unshift(newGroupConversation)
+          conversationId = newGroupConversation.id
         }
       } else {
-        // 创建新会话
-        const newConversation: Conversation = {
-          id: `conv_${senderIdStr}_${receiverIdStr}_${Date.now()}`,
-          participantIds: [senderIdStr, receiverIdStr],
-          unreadCount: 0, // 初始化为0，后面会正确计算
-          timestamp: new Date(message.createTime),
-          type: 'private'
-        }
-        ; (this as any).conversations.unshift(newConversation)
-        conversationId = newConversation.id
-      }
+        // 处理私聊消息
+        const existingConv = (this as any).conversations.find((conv: Conversation) => {
+          return conv.participantIds.includes(senderIdStr) &&
+                 conv.participantIds.includes(receiverIdStr)
+        })
 
+        if (existingConv) {
+          conversationId = existingConv.id
+        } else {
+          // 创建新会话
+          const newConversation: Conversation = {
+            id: `conv_${senderIdStr}_${receiverIdStr}_${Date.now()}`,
+            participantIds: [senderIdStr, receiverIdStr],
+            unreadCount: 0,
+            timestamp: new Date(message.createTime),
+            type: 'private'
+          }
+          ; (this as any).conversations.unshift(newConversation)
+          conversationId = newConversation.id
+        }
+      }
+      
       // 添加消息到对应会话
       if (conversationId) {
         if (!(this as any).messages[conversationId]) {
           ; (this as any).messages[conversationId] = []
         }
+        
         // 检查消息是否已存在（避免重复添加）
         const existingMessages = (this as any).messages[conversationId]
         const messageExists = existingMessages.some((msg: Message) => msg.id === message.id)
@@ -693,8 +767,7 @@ export const useChatStore = defineStore('chat', {
           this.handleWebSocketPrivateMessage(messageData)
           break
         case 'group':
-          // TODO: 处理群聊消息
-          console.log('收到群聊消息:', messageData)
+          this.handleWebSocketGroupMessage(messageData)
           break
         case 'typing':
           // TODO: 处理输入指示器
@@ -746,6 +819,66 @@ export const useChatStore = defineStore('chat', {
       this.addMessage(chatMessage)
     },
 
+    // 处理WebSocket接收到的群聊消息
+    handleWebSocketGroupMessage(messageData: any) {
+      console.log('收到WebSocket群聊消息:', messageData)
+      
+      // 处理嵌套的消息格式
+      const message = messageData.message || messageData
+      
+      // 获取群ID
+      const groupId = message.groupId || messageData.groupId
+      if (!groupId) {
+        console.warn('群聊消息缺少群ID:', messageData)
+        return
+      }
+      
+      // 创建群聊会话ID
+      const conversationId = `group_${groupId}`
+      
+      // 检查是否已存在该群聊会话
+      let conversation = this.conversations.find(c => c.id === conversationId)
+      
+      // 如果会话不存在，创建新的群聊会话
+      if (!conversation) {
+        conversation = {
+          id: conversationId,
+          type: 'group',
+          participantIds: [], // 群聊的参与者ID列表
+          name: message.groupName || `群聊 ${groupId}`,
+          avatar: message.groupAvatar || '',
+          lastMessage: undefined,
+          unreadCount: 0,
+          timestamp: new Date()
+        }
+        
+        // 添加到会话列表
+        this.conversations.push(conversation)
+        this.messages[conversationId] = []
+      }
+      
+      // 创建消息对象
+      const chatMessage: Message = {
+        id: message.id || messageData.id || Date.now(),
+        fromUserId: message.fromUserId || message.senderId || messageData.fromUserId,
+        groupId: groupId,
+        content: message.content || messageData.content,
+        messageType: this.convertMessageType(message.messageType || messageData.messageType || 1),
+        status: 'delivered',
+        sendTime: this.validateAndFormatTime(message.sendTime || messageData.sendTime),
+        createTime: this.validateAndFormatTime(message.createTime || messageData.createTime),
+        updateTime: this.validateAndFormatTime(message.updateTime || messageData.updateTime),
+        // 兼容字段
+        senderId: message.fromUserId || message.senderId || messageData.fromUserId,
+        isRecalled: false
+      }
+
+      console.log('转换后的群聊消息:', chatMessage)
+      
+      // 使用addMessage方法添加消息，确保去重逻辑生效
+      this.addMessage(chatMessage)
+    },
+
     // 验证和格式化时间的辅助方法
     validateAndFormatTime(timeValue: any): string {
       if (!timeValue) {
@@ -786,6 +919,96 @@ export const useChatStore = defineStore('chat', {
       }
     },
 
+    // 加载群聊历史记录
+    async loadGroupChatHistory(groupId: number) {
+      try {
+        const authStore = useAuthStore()
+        const currentUserId = authStore.userInfo?.id
+        if (!currentUserId) return
+
+        console.log('加载群聊历史:', { groupId })
+
+        // 创建群聊会话ID
+        const conversationId = `group_${groupId}`
+
+        // 确保消息数组已初始化
+        if (!(this as any).messages[conversationId]) {
+          ; (this as any).messages[conversationId] = []
+        }
+
+        try {
+          // 调用API获取群聊历史
+          const response = await chatApi.getGroupMessages(groupId)
+          
+          // 检查响应结构
+          console.log('群聊消息API响应:', response)
+          
+          // 处理不同的响应结构
+          let messages = []
+          if (response.data?.code === 200 && response.data?.data) {
+            // 标准响应结构
+            messages = response.data.data
+          } else if (Array.isArray(response.data)) {
+            // 直接返回数组的情况
+            messages = response.data
+          } else if (response.data?.messages) {
+            // 包含在messages字段中的情况
+            messages = response.data.messages
+          } else if (response.code === 200 && response.data) {
+            // 另一种响应结构
+            messages = response.data
+          } else {
+            console.warn('无法识别的群聊消息响应格式:', response)
+            return
+          }
+          
+          console.log('获取到群聊历史消息:', messages.length)
+
+          // 转换消息格式并添加到store
+          const formattedMessages = messages.map((msg: any) => ({
+            id: msg.id,
+            fromUserId: msg.fromUserId || msg.senderId,
+            groupId: groupId,
+            content: msg.content,
+            messageType: this.convertMessageType(msg.messageType || 1),
+            status: 'delivered',
+            sendTime: this.validateAndFormatTime(msg.sendTime),
+            createTime: this.validateAndFormatTime(msg.createTime),
+            updateTime: this.validateAndFormatTime(msg.updateTime),
+            senderId: msg.fromUserId || msg.senderId,
+            isRecalled: msg.isRecalled || false
+          }))
+
+          // 按时间排序
+          formattedMessages.sort((a: any, b: any) => {
+            return new Date(a.createTime).getTime() - new Date(b.createTime).getTime()
+          })
+
+          // 更新消息列表
+          ; (this as any).messages[conversationId] = formattedMessages
+
+          // 更新会话的最后一条消息
+          const conversation = (this as any).conversations.find((conv: Conversation) => conv.id === conversationId)
+          if (conversation && formattedMessages.length > 0) {
+            conversation.lastMessage = formattedMessages[formattedMessages.length - 1]
+          }
+
+          console.log('群聊历史加载完成')
+        } catch (apiError) {
+          console.error('API调用失败:', apiError)
+          // 如果API调用失败，至少初始化一个空的消息列表，避免界面报错
+          ; (this as any).messages[conversationId] = []
+        }
+      } catch (error) {
+        console.error('加载群聊历史出错:', error)
+        // 确保即使出错也有一个有效的消息数组
+        const conversationId = `group_${groupId}`
+        if (!(this as any).messages[conversationId]) {
+          ; (this as any).messages[conversationId] = []
+        }
+      }
+    },
+
     // 加载聊天历史记录
     async loadChatHistory(conversationId: string) {
       try {
@@ -797,10 +1020,21 @@ export const useChatStore = defineStore('chat', {
         const conversation = (this as any).conversations.find((conv: Conversation) => conv.id === conversationId)
         if (!conversation) return
 
+        // 检查会话类型
+        if (conversation.type === 'group') {
+          // 如果是群聊会话，提取群ID并加载群聊历史
+          const groupId = conversationId.replace('group_', '')
+          if (groupId) {
+            await this.loadGroupChatHistory(parseInt(groupId))
+            return
+          }
+        }
+
+        // 如果是私聊会话，提取好友ID
         const friendId = conversation.participantIds.find((id: string) => id !== currentUserId.toString())
         if (!friendId) return
 
-        console.log('加载聊天历史:', { conversationId, friendId })
+        console.log('加载私聊历史:', { conversationId, friendId })
 
         // 调用API获取聊天历史
         const response = await chatApi.getChatHistory(parseInt(friendId))

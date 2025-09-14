@@ -38,6 +38,11 @@
 
             <!-- 消息内容 -->
             <div class="message-content">
+              <!-- 群聊中显示发送者名称（仅非自己的消息） -->
+              <div v-if="!isOwnMessage(message) && chatStore.activeConversationId?.startsWith('group_')" class="sender-name">
+                {{ chatStore.getContactById(message.fromUserId || message.senderId)?.nickname || '未知用户' }}
+              </div>
+              
               <div class="message-bubble" :class="getBubbleClass(message)">
                 <template v-if="isImage(message)">
                   <el-image
@@ -255,8 +260,12 @@ const isOwnMessage = (message: Message) => {
 }
 
 const getSenderAvatar = (message: Message) => {
-  console.log('获取头像 - 消息senderId:', message.senderId, '消息内容:', message.content)
-  const sender = chatStore.getContactById(message.senderId)
+  // 获取发送者ID，兼容fromUserId和senderId
+  const senderId = message.fromUserId || message.senderId
+  console.log('获取头像 - 消息senderId:', senderId, '消息内容:', message.content)
+  
+  // 获取发送者信息
+  const sender = chatStore.getContactById(senderId)
   
   // 如果sender存在且有avatar字段，检查是否是标识符格式
   let avatarUrl = 'https://avatars.githubusercontent.com/u/0?v=4' // 默认头像
@@ -343,9 +352,17 @@ const formatMessageTime = (timestamp: Date | string) => {
   }
 }
 
-const getContactDisplayName = (contact: User | null) => {
-  if (!contact) return '选择联系人'
-  return contact.nickname || contact.username || contact.name || '未知联系人'
+const getContactDisplayName = (contact: any) => {
+  if (!contact) return '未知联系人'
+  
+  // 检查是否是群聊会话
+  if (chatStore.activeConversationId?.startsWith('group_')) {
+    // 群聊显示名称优先级：群名称 > 群ID
+    return contact.name || contact.groupName || `群聊 ${contact.id}` || '未知群聊'
+  }
+  
+  // 私聊显示名称优先级：备注 > 昵称 > 用户名
+  return contact.remark || contact.nickname || contact.username || '未知联系人'
 }
 
 const getContactStatusText = (status?: number) => {
@@ -385,9 +402,9 @@ const sendMessage = async () => {
   const content = inputText.value.trim()
   console.log('准备发送消息内容:', content)
   
-  // 检查好友关系
+  // 检查好友关系（仅私聊需要）
   const contact = currentContact.value
-  if (contact) {
+  if (contact && !chatStore.activeConversationId.startsWith('group_')) {
     console.log('检查与联系人的好友关系:', contact.id)
     const isFriend = await checkFriendship(contact.id)
     console.log('好友关系检查结果:', isFriend)
@@ -399,7 +416,7 @@ const sendMessage = async () => {
     }
   }
 
-  console.log('好友关系验证通过，开始发送消息')
+  console.log('关系验证通过，开始发送消息')
   
   try {
     // 使用WebSocket发送消息
@@ -420,6 +437,12 @@ const sendMessage = async () => {
 
 // 检查好友关系
 const checkFriendship = async (friendId: number): Promise<boolean> => {
+  // 如果是群聊会话，直接返回true，不需要检查好友关系
+  if (chatStore.activeConversationId?.startsWith('group_')) {
+    console.log('当前是群聊会话，跳过好友关系检查')
+    return true
+  }
+  
   try {
     // 首先检查本地联系人列表中是否还有这个好友
     const isInContactList = chatStore.contacts.some(contact => contact.id === friendId)
@@ -696,6 +719,13 @@ onUnmounted(() => {
   display: flex;
   flex-direction: column;
   gap: 4px;
+}
+
+.sender-name {
+  font-size: 12px;
+  color: #666;
+  margin-bottom: 2px;
+  padding-left: 8px;
 }
 
 .own-message .message-content {

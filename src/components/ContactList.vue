@@ -64,7 +64,15 @@ const chatStore = useChatStore()
 
 const getContactName = (conversation: Conversation) => {
   const contact = chatStore.getConversationContact(conversation)
-  return contact?.name || '未知联系人'
+  
+  // 检查是否是群聊会话
+  if (conversation.id?.startsWith('group_')) {
+    // 群聊显示名称优先级：群名称 > 群ID
+    return contact?.name || contact?.groupName || `群聊 ${contact?.id}` || '未知群聊'
+  }
+  
+  // 私聊显示名称优先级：备注 > 昵称 > 用户名
+  return contact?.name || contact?.remark || contact?.nickname || contact?.username || '未知联系人'
 }
 
 const getContactAvatar = (conversation: Conversation) => {

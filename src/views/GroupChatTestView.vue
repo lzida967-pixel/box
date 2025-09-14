@@ -311,13 +311,30 @@ const loadGroupAvatar = async (groupId: number) => {
 
 const testGroupChat = (group: ChatGroup) => {
   addLog('INFO', `测试进入群聊: ${group.remark || group.name}`)
-  // 这里可以添加进入群聊的逻辑
   ElMessage.info(`进入群聊: ${group.remark || group.name}`)
+  
+  // 跳转到聊天界面并开始群聊
+  router.push({
+    name: 'chat',
+    params: {
+      type: 'group',
+      id: group.id.toString()
+    }
+  })
 }
 
 const handleStartGroupChat = (group: ChatGroup) => {
   addLog('INFO', `开始群聊: ${group.remark || group.name}`)
   ElMessage.success(`开始与 ${group.remark || group.name} 的群聊`)
+  
+  // 跳转到聊天界面并开始群聊
+  router.push({
+    name: 'chat',
+    params: {
+      type: 'group',
+      id: group.id.toString()
+    }
+  })
 }
 
 const toggleConnection = () => {

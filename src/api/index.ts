@@ -167,7 +167,7 @@ export const chatApi = {
    * 获取群聊消息记录
    */
   getGroupMessages: (groupId: number, page = 1, size = 50): Promise<AxiosResponse<ApiResponse<any[]>>> => {
-    return api.get('/messages/group', {
+    return api.get('/messages/group/history', {
       params: {
         groupId,
         page,

@@ -166,8 +166,11 @@ CREATE TABLE IF NOT EXISTS chat_groups (
     INDEX idx_deleted (deleted),
     FOREIGN KEY (owner_id) REFERENCES users(id) ON DELETE CASCADE
 ) ENGINE=INNODB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci COMMENT='群组表';
+
+ALTER TABLE chat_groups 
 ADD COLUMN group_avatar_data LONGBLOB COMMENT '群头像二进制' AFTER group_avatar,
 ADD COLUMN group_avatar_content_type VARCHAR(100) COMMENT '群头像类型' AFTER group_avatar_data;
+
 CREATE INDEX idx_group_members_mute_until ON group_members(group_id, user_id, mute_until);
 -- 创建群成员表
 CREATE TABLE IF NOT EXISTS group_members (
