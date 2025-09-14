@@ -13,11 +13,15 @@ import org.springframework.security.core.Authentication;
 import org.springframework.web.bind.annotation.*;
 import org.springframework.web.multipart.MultipartFile;
 
+import java.awt.*;
+import java.awt.image.BufferedImage;
+import java.io.ByteArrayOutputStream;
 import java.time.LocalDateTime;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.stream.Collectors;
+import javax.imageio.ImageIO;
 
 /**
  * 群组控制器
@@ -405,10 +409,56 @@ public class GroupController {
                     .headers(headers)
                     .body(group.getGroupAvatarData());
             } else {
-                return ResponseEntity.notFound().build();
+                // 返回默认头像
+                byte[] defaultAvatar = getDefaultGroupAvatar();
+                HttpHeaders headers = new HttpHeaders();
+                headers.setContentType(MediaType.IMAGE_JPEG);
+                return ResponseEntity.ok()
+                    .headers(headers)
+                    .body(defaultAvatar);
             }
         } catch (Exception e) {
             return ResponseEntity.internalServerError().build();
+        }
+    }
+
+    /**
+     * 生成默认群头像
+     */
+    private byte[] getDefaultGroupAvatar() {
+        try {
+            // 创建一个简单的默认头像（蓝色圆形背景 + 白色"群"字）
+            int width = 100;
+            int height = 100;
+            BufferedImage image = new BufferedImage(width, height, BufferedImage.TYPE_INT_RGB);
+            Graphics2D g2d = image.createGraphics();
+            
+            // 设置抗锯齿
+            g2d.setRenderingHint(RenderingHints.KEY_ANTIALIASING, RenderingHints.VALUE_ANTIALIAS_ON);
+            
+            // 绘制蓝色背景
+            g2d.setColor(new Color(64, 158, 255)); // Element Plus 主题蓝色
+            g2d.fillOval(0, 0, width, height);
+            
+            // 绘制白色"群"字
+            g2d.setColor(Color.WHITE);
+            Font font = new Font("Microsoft YaHei", Font.BOLD, 40);
+            g2d.setFont(font);
+            
+            FontMetrics metrics = g2d.getFontMetrics();
+            int x = (width - metrics.stringWidth("群")) / 2;
+            int y = ((height - metrics.getHeight()) / 2) + metrics.getAscent();
+            
+            g2d.drawString("群", x, y);
+            g2d.dispose();
+            
+            // 转换为字节数组
+            ByteArrayOutputStream baos = new ByteArrayOutputStream();
+            ImageIO.write(image, "JPEG", baos);
+            return baos.toByteArray();
+        } catch (Exception e) {
+            // 如果生成失败，返回一个简单的占位符
+            return new byte[0];
         }
     }
 

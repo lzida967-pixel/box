@@ -73,14 +73,16 @@
 </template>
 
 <script setup lang="ts">
-import { ref, computed, onMounted } from 'vue'
+import { ref, computed, onMounted, onUnmounted } from 'vue'
 import { ElMessage } from 'element-plus'
+import { useAuthStore } from '@/stores/auth'
 import { groupApi } from '@/api'
 import CreateGroupDialog from './groups/dialogs/CreateGroupDialog.vue'
 import type { ChatGroup } from '@/types'
 import dayjs from 'dayjs'
 
 // 响应式数据
+const authStore = useAuthStore()
 const searchText = ref('')
 const groups = ref<ChatGroup[]>([])
 const selectedGroup = ref<ChatGroup | null>(null)
@@ -158,16 +160,58 @@ const handleGroupCreated = (groupDTO: any) => {
   ElMessage.success('群聊创建成功')
 }
 
+// 存储已加载的群头像
+const groupAvatarCache = ref<Map<number, string>>(new Map())
+
 const getGroupAvatar = (group: ChatGroup) => {
-  if (group.avatar) {
-    // 如果是二进制数据存储的头像
-    if (group.avatar.startsWith('data:image/')) {
-      return group.avatar
+  // 检查多个可能的头像字段
+  const avatar = group.avatar || group.groupAvatar
+  
+  if (avatar) {
+    // 如果是base64格式的图片数据
+    if (avatar.startsWith('data:image/')) {
+      return avatar
     }
-    // 如果是文件路径
-    return `http://localhost:8080/api/group/avatar/${group.id}`
   }
+  
+  // 检查缓存中是否已有该群的头像
+  if (groupAvatarCache.value.has(group.id)) {
+    const cachedAvatar = groupAvatarCache.value.get(group.id)
+    return cachedAvatar || null
+  }
+  
+  // 异步加载头像
+  loadGroupAvatar(group.id)
+  
+  // 返回null让el-avatar显示fallback，直到头像加载完成
   return null
+}
+
+// 异步加载群头像
+const loadGroupAvatar = async (groupId: number) => {
+  try {
+    const response = await fetch(`http://localhost:8080/api/group/${groupId}/avatar`, {
+      headers: {
+        'Authorization': `Bearer ${authStore.currentUser?.token || authStore.userInfo?.token || ''}`
+      }
+    })
+    
+    if (response.ok) {
+      const blob = await response.blob()
+      const reader = new FileReader()
+      reader.onload = () => {
+        const base64 = reader.result as string
+        groupAvatarCache.value.set(groupId, base64)
+      }
+      reader.readAsDataURL(blob)
+    } else {
+      // 头像不存在或无权限访问，缓存空字符串避免重复请求
+      groupAvatarCache.value.set(groupId, '')
+    }
+  } catch (error) {
+    console.error('加载群头像失败:', error)
+    groupAvatarCache.value.set(groupId, '')
+  }
 }
 
 const getLastMessageText = (message: any) => {
@@ -213,6 +257,22 @@ const formatTime = (timestamp?: Date | string) => {
 // 生命周期
 onMounted(() => {
   loadGroups()
+  
+  // 监听群组头像更新事件
+  const handleGroupAvatarUpdated = (event: CustomEvent) => {
+    const { groupId } = event.detail
+    if (groupId && groupAvatarCache.value.has(groupId)) {
+      groupAvatarCache.value.delete(groupId)
+      console.log('清除群组头像缓存:', groupId)
+    }
+  }
+  
+  window.addEventListener('groupAvatarUpdated', handleGroupAvatarUpdated as EventListener)
+  
+  // 清理事件监听器
+  onUnmounted(() => {
+    window.removeEventListener('groupAvatarUpdated', handleGroupAvatarUpdated as EventListener)
+  })
 })
 
 // 暴露方法给父组件

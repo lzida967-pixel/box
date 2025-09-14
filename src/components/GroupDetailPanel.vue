@@ -36,7 +36,7 @@
       <div class="group-info-section">
         <div class="avatar-section">
           <div class="avatar-with-upload">
-            <el-avatar :src="getGroupAvatar(group)" :size="80">
+            <el-avatar :src="getGroupAvatarUrl" :size="80" @error="handleAvatarError">
               {{ (group?.name || group?.groupName)?.charAt(0) }}
             </el-avatar>
             <el-upload
@@ -48,6 +48,7 @@
               :before-upload="beforeAvatarUpload"
               :on-success="handleAvatarSuccess"
               accept="image/*"
+              name="avatar"
             >
               <el-button size="small" circle>
                 <el-icon><Edit /></el-icon>
@@ -257,7 +258,7 @@
 </template>
 
 <script setup lang="ts">
-import { ref, computed, watch } from 'vue'
+import { ref, computed, watch, nextTick } from 'vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import { Edit, Bell, Setting, Delete, Close, ChatDotRound, Plus, Minus, Mute, Microphone } from '@element-plus/icons-vue'
 import { useAuthStore } from '@/stores/auth'
@@ -333,8 +334,15 @@ const handleAvatarSuccess = (response: any) => {
     // 更新群组头像
     if (props.group) {
       props.group.avatar = response.data.url || response.data
+      // 清除缓存，强制重新加载头像
+      groupAvatarCache.value.delete(props.group.id)
     }
     ElMessage.success(response.message || '头像上传成功')
+    
+    // 触发全局事件通知其他组件清除缓存
+    window.dispatchEvent(new CustomEvent('groupAvatarUpdated', {
+      detail: { groupId: props.group.id }
+    }))
   } else {
     ElMessage.error(response.message || '头像上传失败')
   }
@@ -399,23 +407,96 @@ const loadMembers = async () => {
   }
 }
 
-const getGroupAvatar = (group: ChatGroup) => {
-  if (group.avatar) {
-    if (group.avatar.startsWith('data:image/')) {
-      return group.avatar
+// 存储已加载的群头像
+const groupAvatarCache = ref<Map<number, string>>(new Map())
+
+// 计算属性：获取当前群的头像URL
+const getGroupAvatarUrl = computed(() => {
+  if (!props.group) return null
+  
+  // 检查多个可能的头像字段
+  const avatar = props.group.avatar || props.group.groupAvatar
+  
+  if (avatar && typeof avatar === 'string') {
+    // 如果是base64格式的图片数据
+    if (avatar.startsWith('data:image/')) {
+      return avatar
     }
-    return `http://localhost:8080/api/group/avatar/${group.id}`
   }
+  
+  // 检查缓存中是否已有该群的头像
+  const cachedAvatar = groupAvatarCache.value.get(props.group.id)
+  if (cachedAvatar) {
+    return cachedAvatar
+  }
+  
+  // 异步加载头像
+  loadGroupAvatar(props.group.id)
+  
+  // 返回null让el-avatar显示fallback，直到头像加载完成
+  return null
+})
+
+// 异步加载群头像
+const loadGroupAvatar = async (groupId: number) => {
+  try {
+    const response = await fetch(`http://localhost:8080/api/group/${groupId}/avatar`, {
+      headers: {
+        'Authorization': `Bearer ${authStore.currentUser?.token || authStore.userInfo?.token || ''}`
+      }
+    })
+    
+    if (response.ok) {
+      const blob = await response.blob()
+      const reader = new FileReader()
+      reader.onload = () => {
+        const base64 = reader.result as string
+        groupAvatarCache.value.set(groupId, base64)
+      }
+      reader.readAsDataURL(blob)
+    } else {
+      // 头像不存在或无权限访问，缓存空字符串避免重复请求
+      groupAvatarCache.value.set(groupId, '')
+    }
+  } catch (error) {
+    console.error('加载群头像失败:', error)
+    groupAvatarCache.value.set(groupId, '')
+  }
+}
+
+const getGroupAvatar = (group: ChatGroup) => {
+  // 检查多个可能的头像字段
+  const avatar = group.avatar || group.groupAvatar
+  
+  if (avatar && typeof avatar === 'string') {
+    // 如果是base64格式的图片数据
+    if (avatar.startsWith('data:image/')) {
+      return avatar
+    }
+  }
+  
+  // 检查缓存中是否已有该群的头像
+  if (groupAvatarCache.value.has(group.id)) {
+    const cachedAvatar = groupAvatarCache.value.get(group.id)
+    return cachedAvatar || null
+  }
+  
+  // 异步加载头像
+  loadGroupAvatar(group.id)
+  
+  // 返回null让el-avatar显示fallback，直到头像加载完成
   return null
 }
 
 const getUserAvatar = (user: any) => {
   if (!user?.avatar) return 'https://avatars.githubusercontent.com/u/0?v=4'
   
-  if (user.avatar.startsWith('avatar_')) {
-    return `http://localhost:8080/api/user/avatar/${user.id}`
-  } else if (user.avatar.startsWith('/api/user/avatar/')) {
-    return `http://localhost:8080${user.avatar}`
+  if (user.avatar && typeof user.avatar === 'string') {
+    if (user.avatar.startsWith('avatar_')) {
+      return `http://localhost:8080/api/user/avatar/${user.id}`
+    } else if (user.avatar.startsWith('/api/user/avatar/')) {
+      return `http://localhost:8080${user.avatar}`
+    }
   }
   
   return user.avatar
@@ -424,13 +505,20 @@ const getUserAvatar = (user: any) => {
 const getMemberAvatar = (member: GroupMember) => {
   if (!member?.avatar) return 'https://avatars.githubusercontent.com/u/0?v=4'
   
-  if (member.avatar.startsWith('avatar_')) {
-    return `http://localhost:8080/api/user/avatar/${member.userId}`
-  } else if (member.avatar.startsWith('/api/user/avatar/')) {
-    return `http://localhost:8080${member.avatar}`
+  if (member.avatar && typeof member.avatar === 'string') {
+    if (member.avatar.startsWith('avatar_')) {
+      return `http://localhost:8080/api/user/avatar/${member.userId}`
+    } else if (member.avatar.startsWith('/api/user/avatar/')) {
+      return `http://localhost:8080${member.avatar}`
+    }
   }
   
   return member.avatar
+}
+
+const handleAvatarError = (event: Event) => {
+  console.log('群头像加载失败:', event)
+  // 头像加载失败时，el-avatar会自动显示fallback内容（群名首字母）
 }
 
 const getOwnerName = () => {
