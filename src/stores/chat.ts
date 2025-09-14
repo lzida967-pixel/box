@@ -1,7 +1,7 @@
 import { defineStore } from 'pinia'
 import type { User, Message, Conversation } from '@/types'
 import { useAuthStore } from './auth'
-import { contactApi, chatApi } from '@/api'
+import { contactApi, chatApi, groupApi } from '@/api'
 import { getWebSocketService } from '@/services/websocket'
 
 interface ChatState {
@@ -98,17 +98,20 @@ export const useChatStore = defineStore('chat', {
 
       return [...state.conversations]
         .filter((conv: Conversation) => {
-          // 显示有消息的会话，或者当前活跃的会话（即使没有消息）
+          // 显示有消息的会话，或者当前活跃的会话，或者有未读消息的会话
           const hasMessages = state.messages[conv.id] && state.messages[conv.id].length > 0
           const isActiveConversation = conv.id === state.activeConversationId
+          const hasUnreadMessages = conv.unreadCount > 0
           
-          // 群聊会话处理
+          // 群聊会话处理 - 有消息记录、是当前活跃会话或有未读消息时显示
           if (conv.id.startsWith('group_')) {
-            return true // 始终显示群聊会话
+            return hasMessages || isActiveConversation || hasUnreadMessages
           }
           
-          // 私聊会话处理
-          return conv.participantIds.includes(currentUserId.toString()) && (hasMessages || isActiveConversation)
+          // 私聊会话处理 - 显示有消息的会话、当前活跃的会话或有未读消息的会话
+          // 确保会话包含当前用户
+          const includesCurrentUser = conv.participantIds.includes(currentUserId.toString())
+          return includesCurrentUser && (hasMessages || isActiveConversation || hasUnreadMessages)
         })
         .sort((a: Conversation, b: Conversation) => {
           // 获取最后一条消息的时间，如果没有消息则使用会话时间戳
@@ -614,15 +617,24 @@ export const useChatStore = defineStore('chat', {
       // 使用正确的字段名（兼容旧字段名）
       const senderId = message.fromUserId || message.senderId
       const receiverId = message.toUserId || message.receiverId
+      const groupId = message.groupId
       
-      if (!senderId || !receiverId) {
-        console.warn('消息缺少发送者或接收者ID:', message)
+      // 群聊消息处理 - 只有 senderId 和 groupId
+      if (groupId) {
+        if (!senderId) {
+          console.warn('群聊消息缺少发送者ID:', message)
+          return
+        }
+      } 
+      // 私聊消息处理 - 需要 senderId 和 receiverId
+      else if (!senderId || !receiverId) {
+        console.warn('私聊消息缺少发送者或接收者ID:', message)
         return
       }
 
       // 确保ID类型一致（后端返回数字，前端使用字符串）
       const senderIdStr = senderId.toString()
-      const receiverIdStr = receiverId.toString()
+      const receiverIdStr = receiverId ? receiverId.toString() : null
       const currentUserIdStr = currentUserId.toString()
 
       // 如果发送者不在联系人列表中，重新加载联系人列表
@@ -649,7 +661,7 @@ export const useChatStore = defineStore('chat', {
           // 如果群聊会话不存在，创建新的群聊会话
           const newGroupConversation: Conversation = {
             id: groupConversationId,
-            participantIds: [currentUserIdStr], // 初始只包含当前用户
+            participantIds: [currentUserIdStr], // 群聊会话只需要包含当前用户
             unreadCount: 0,
             timestamp: new Date(message.createTime),
             type: 'group',
@@ -658,8 +670,8 @@ export const useChatStore = defineStore('chat', {
           ; (this as any).conversations.unshift(newGroupConversation)
           conversationId = newGroupConversation.id
         }
-      } else {
-        // 处理私聊消息
+      } else if (receiverIdStr) {
+        // 处理私聊消息（只有在有接收者ID时才处理）
         const existingConv = (this as any).conversations.find((conv: Conversation) => {
           return conv.participantIds.includes(senderIdStr) &&
                  conv.participantIds.includes(receiverIdStr)
@@ -841,10 +853,13 @@ export const useChatStore = defineStore('chat', {
       
       // 如果会话不存在，创建新的群聊会话
       if (!conversation) {
+        const authStore = useAuthStore()
+        const currentUserId = authStore.userInfo?.id
+        
         conversation = {
           id: conversationId,
           type: 'group',
-          participantIds: [], // 群聊的参与者ID列表
+          participantIds: currentUserId ? [currentUserId.toString()] : [], // 包含当前用户ID
           name: message.groupName || `群聊 ${groupId}`,
           avatar: message.groupAvatar || '',
           lastMessage: undefined,
@@ -1153,9 +1168,70 @@ export const useChatStore = defineStore('chat', {
           }
         }
         
+        // 3. 加载用户的群聊消息
+        await this.loadUserGroupChats(userId)
+        
         console.log('真实聊天历史记录加载完成')
       } catch (error) {
         console.error('加载真实聊天历史记录失败:', error)
+      }
+    },
+    
+    // 加载用户的群聊消息
+    async loadUserGroupChats(userId: string) {
+      try {
+        console.log('开始加载用户群聊消息，用户ID:', userId)
+        
+        // 获取用户加入的群组列表
+        const response = await groupApi.getUserGroups()
+        
+        if (response.code === 200 && response.data) {
+          const groups = response.data
+          console.log('获取到用户群组列表:', groups.length, '个群组')
+          
+          // 为每个群组加载聊天历史
+          for (const group of groups) {
+            try {
+              // 创建群聊会话ID
+              const conversationId = `group_${group.id}`
+              
+              // 检查是否已存在该群聊会话
+              let conversation = this.conversations.find(c => c.id === conversationId)
+              
+              if (!conversation) {
+                // 创建新的群聊会话
+                conversation = {
+                  id: conversationId,
+                  type: 'group',
+                  participantIds: [userId], // 包含当前用户
+                  name: group.name || group.groupName || `群聊 ${group.id}`,
+                  avatar: group.avatar || group.groupAvatar || '',
+                  description: group.description || group.groupDescription || '',
+                  memberCount: group.memberCount || 1,
+                  ownerId: group.ownerId,
+                  lastMessage: undefined,
+                  unreadCount: 0,
+                  timestamp: new Date(),
+                  groupInfo: group // 保存完整的群组信息
+                }
+                
+                // 添加到会话列表
+                this.conversations.unshift(conversation)
+                this.messages[conversationId] = [] // 初始化消息数组
+              }
+              
+              // 加载群聊历史记录
+              await this.loadGroupChatHistory(group.id)
+              
+            } catch (error) {
+              console.warn(`加载群组 ${group.id} 的聊天历史失败:`, error)
+            }
+          }
+        } else {
+          console.warn('获取用户群组列表失败:', response)
+        }
+      } catch (error) {
+        console.error('加载用户群聊消息失败:', error)
       }
     },
 

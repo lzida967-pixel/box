@@ -5,7 +5,12 @@
       <div class="contact-info">
         <el-avatar :src="getContactAvatar(currentContact)" :size="40" />
         <div class="contact-details">
-          <div class="contact-name">{{ getContactDisplayName(currentContact) }}</div>
+          <div class="contact-name">
+            {{ getContactDisplayName(currentContact) }}
+            <el-icon v-if="chatStore.activeConversationId?.startsWith('group_')" class="group-icon" title="群聊">
+              <UserFilled />
+            </el-icon>
+          </div>
           <div class="contact-status">{{ getContactStatusText(currentContact?.status) }}</div>
         </div>
       </div>
@@ -165,7 +170,7 @@ import { useChatStore } from '@/stores/chat'
 import { getWebSocketService } from '@/services/websocket'
 import type { Message, User } from '@/types'
 import dayjs from 'dayjs'
-import { imageApi } from '@/api'
+import { chatApi, contactApi, imageApi } from '@/api'
 
 const props = defineProps<{
   contact?: User | null
@@ -352,7 +357,7 @@ const formatMessageTime = (timestamp: Date | string) => {
   }
 }
 
-const getContactDisplayName = (contact: any) => {
+const getContactDisplayName = (contact: User | null) => {
   if (!contact) return '未知联系人'
   
   // 检查是否是群聊会话
@@ -517,8 +522,6 @@ const stopTypingIndicator = () => {
 const selectImage = () => {
   imageInputRef.value?.click()
 }
-
-import { chatApi, imageApi, contactApi } from '@/api'
 
 const handleImageSelect = async (event: Event) => {
   const target = event.target as HTMLInputElement

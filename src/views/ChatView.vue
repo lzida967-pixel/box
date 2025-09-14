@@ -65,7 +65,12 @@
           
           <div class="conversation-content">
             <div class="conversation-header">
-              <div class="conversation-name">{{ getContactName(conversation) }}</div>
+              <div class="conversation-name">
+                {{ getContactName(conversation) }}
+                <el-icon v-if="conversation.id?.startsWith('group_')" class="group-icon" title="群聊">
+                  <UserFilled />
+                </el-icon>
+              </div>
               <div class="conversation-time">{{ formatTime(getConversationLastMessageTime(conversation)) }}</div>
             </div>
             
@@ -604,10 +609,11 @@ const startGroupChat = async (group: ChatGroup) => {
     
     if (!conversation) {
       // 创建新的群聊会话
+      const currentUserId = authStore.userInfo?.id?.toString()
       conversation = {
         id: conversationId,
         type: 'group',
-        participantIds: [], // 群聊的参与者ID列表
+        participantIds: currentUserId ? [currentUserId] : [], // 包含当前用户ID
         name: group.name || group.groupName || `群聊 ${group.id}`,
         avatar: group.avatar || group.groupAvatar || '',
         description: group.description || group.groupDescription || '',
@@ -1024,6 +1030,14 @@ onMounted(async () => {
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.group-icon {
+  color: #1890ff;
+  font-size: 12px;
 }
 
 .conversation-time {
