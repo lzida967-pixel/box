@@ -28,14 +28,14 @@
           :model-value="isSelected(member)"
           @change="toggleMember(member)"
         />
-        <el-avatar :src="getUserAvatar(member.user)" :size="40" />
+        <el-avatar :src="getUserAvatar(member)" :size="40" />
         <div class="member-info">
           <div class="member-name">
-            {{ member.nickname || member.user?.username }}
-            <el-tag v-if="member.role === 'ADMIN'" type="warning" size="small">管理员</el-tag>
+            {{ member.memberNickname || member.nickname || member.user?.username }}
+            <el-tag v-if="member.memberRole === 2" type="warning" size="small">管理员</el-tag>
           </div>
           <div class="member-status">
-            <span v-if="member.isMuted" class="muted-status">已禁言</span>
+            <span v-if="member.muteUntil" class="muted-status">已禁言</span>
             <span v-else class="normal-status">正常</span>
           </div>
         </div>
@@ -56,8 +56,8 @@
           :key="member.id"
           class="selected-member"
         >
-          <el-avatar :src="getUserAvatar(member.user)" :size="24" />
-          <span class="selected-name">{{ member.nickname || member.user?.username }}</span>
+          <el-avatar :src="getUserAvatar(member)" :size="24" />
+          <span class="selected-name">{{ member.memberNickname || member.nickname || member.user?.username }}</span>
           <el-icon class="remove-icon" @click="removeMember(member)">
             <Close />
           </el-icon>
@@ -93,7 +93,7 @@ import type { GroupMember } from '@/types'
 const props = defineProps<{
   modelValue: boolean
   groupId?: number
-  members: GroupMember[]
+  members?: GroupMember[] // 改为可选，支持实时查询
 }>()
 
 const emit = defineEmits<{
@@ -106,6 +106,8 @@ const authStore = useAuthStore()
 const searchText = ref('')
 const selectedMembers = ref<GroupMember[]>([])
 const loading = ref(false)
+const allMembers = ref<GroupMember[]>([]) // 存储所有群成员
+const loadingMembers = ref(false) // 加载成员的状态
 
 // 计算属性
 const dialogVisible = computed({
@@ -113,41 +115,70 @@ const dialogVisible = computed({
   set: (value) => emit('update:modelValue', value)
 })
 
-// 当前用户的角色
+// 当前用户的角色（数字值：3=群主，2=管理员，1=普通成员）
 const currentUserRole = computed(() => {
-  const currentMember = props.members.find(m => m.userId === authStore.userInfo?.id)
-  return currentMember?.role
+  const currentUserId = authStore.userInfo?.id
+  // 使用宽松比较，避免数字和字符串类型不匹配问题
+  const currentMember = allMembers.value.find(m => Number(m.userId) === Number(currentUserId))
+  console.log('当前用户查找 - authStore.userInfo.id:', currentUserId, '类型:', typeof currentUserId)
+  console.log('当前用户查找 - allMembers:', allMembers.value.map(m => ({ userId: m.userId, type: typeof m.userId })))
+  console.log('当前用户查找 - 找到的成员:', currentMember)
+  return currentMember?.memberRole
 })
 
-// 可移除的成员（排除群主和自己）
+// 可移除的成员（先简化逻辑，显示所有成员除了自己）
 const removableMembers = computed(() => {
-  return props.members.filter(member => {
-    // 不能移除群主
-    if (member.role === 'OWNER') return false
-    
+  console.log('removableMembers计算 - allMembers:', allMembers.value)
+  console.log('removableMembers计算 - currentUserRole:', currentUserRole.value)
+  console.log('removableMembers计算 - authStore.userInfo.id:', authStore.userInfo?.id)
+  
+  // 先简化逻辑：显示所有成员除了自己
+  const result = allMembers.value.filter(member => {
     // 不能移除自己
-    if (member.userId === authStore.userInfo?.id) return false
-    
-    // 如果当前用户是群主，可以移除所有人
-    if (currentUserRole.value === 'OWNER') return true
-    
-    // 如果当前用户是管理员，只能移除普通成员
-    if (currentUserRole.value === 'ADMIN' && member.role === 'MEMBER') return true
-    
-    return false
+    if (Number(member.userId) === Number(authStore.userInfo?.id)) {
+      console.log('排除自己:', member)
+      return false
+    }
+    console.log('可移除:', member)
+    return true
   })
+  
+  console.log('removableMembers结果:', result)
+  return result
 })
 
 const filteredMembers = computed(() => {
+  console.log('filteredMembers计算 - removableMembers:', removableMembers.value)
+  console.log('filteredMembers计算 - searchText:', searchText.value)
   if (!searchText.value) return removableMembers.value
   
   const keyword = searchText.value.toLowerCase()
   return removableMembers.value.filter(member => 
-    (member.nickname || member.user?.username || '').toLowerCase().includes(keyword)
+    (member.memberNickname || member.nickname || member.user?.username || '').toLowerCase().includes(keyword)
   )
 })
 
-// 方法
+// 方法：加载群成员
+const loadGroupMembers = async () => {
+  if (!props.groupId) return
+  
+  loadingMembers.value = true
+  try {
+    // 实时查询群成员（忽略父组件传递的成员列表，确保数据最新）
+    const response = await groupApi.getGroupMembers(props.groupId)
+    console.log('API响应结构:', response)
+    console.log('响应数据:', response.data)
+    // 根据API响应结构，数据直接在response.data中
+    allMembers.value = response.data || []
+    console.log('实时查询的成员列表:', allMembers.value, '长度:', allMembers.value.length)
+  } catch (error: any) {
+    console.error('加载群成员失败:', error)
+    ElMessage.error(error.message || '加载群成员失败')
+  } finally {
+    loadingMembers.value = false
+  }
+}
+
 const isSelected = (member: GroupMember) => {
   return selectedMembers.value.some(m => m.id === member.id)
 }
@@ -208,25 +239,42 @@ const handleRemove = async () => {
   }
 }
 
-const getUserAvatar = (user: any) => {
-  if (!user?.avatar) return 'https://avatars.githubusercontent.com/u/0?v=4'
+const getUserAvatar = (userOrMember: any) => {
+  // 处理直接传递成员对象的情况（成员对象包含 avatar 字段）
+  const avatar = userOrMember?.avatar
+  if (!avatar) return 'https://avatars.githubusercontent.com/u/0?v=4'
   
-  if (user.avatar.startsWith('avatar_')) {
-    return `http://localhost:8080/api/user/avatar/${user.id}`
-  } else if (user.avatar.startsWith('/api/user/avatar/')) {
-    return `http://localhost:8080${user.avatar}`
+  // 如果头像已经是完整的URL，直接返回
+  if (avatar.startsWith('http://') || avatar.startsWith('https://')) {
+    return avatar
   }
   
-  return user.avatar
+  // 如果头像字段是 avatar_ 格式，提取用户ID
+  if (avatar.startsWith('avatar_')) {
+    const userId = avatar.replace('avatar_', '')
+    return `http://localhost:8080/api/user/avatar/${userId}`
+  }
+  
+  // 如果头像字段是 /api/user/avatar/ 格式，补全URL
+  if (avatar.startsWith('/api/user/avatar/')) {
+    return `http://localhost:8080${avatar}`
+  }
+  
+  // 其他情况直接返回
+  return avatar
 }
 
-// 监听对话框显示状态
-watch(dialogVisible, (visible) => {
-  if (!visible) {
+// 监听对话框显示状态和groupId变化
+watch([dialogVisible, () => props.groupId], ([visible, groupId]) => {
+  if (visible && groupId) {
+    // 对话框打开且有groupId时加载群成员
+    loadGroupMembers()
+  } else {
+    // 对话框关闭时清空选择
     selectedMembers.value = []
     searchText.value = ''
   }
-})
+}, { immediate: true })
 </script>
 
 <style scoped>
