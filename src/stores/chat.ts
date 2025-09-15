@@ -597,11 +597,8 @@ export const useChatStore = defineStore('chat', {
         console.log('发送私聊消息:', { receiverId, content })
       }
 
-      // 添加到本地消息列表
-      if (!(this as any).messages[(this as any).activeConversationId]) {
-        ; (this as any).messages[(this as any).activeConversationId] = []
-      }
-      ; (this as any).messages[(this as any).activeConversationId].push(message)
+      // 通过addMessage方法添加消息，确保去重逻辑生效
+      this.addMessage(message)
 
       // 更新会话时间戳
       conversation.timestamp = new Date()
@@ -701,13 +698,42 @@ export const useChatStore = defineStore('chat', {
         
         // 检查消息是否已存在（避免重复添加）
         const existingMessages = (this as any).messages[conversationId]
-        const messageExists = existingMessages.some((msg: Message) => msg.id === message.id)
-        if (!messageExists) {
+        
+        // 首先检查是否有相同ID的消息
+        const messageExistsById = existingMessages.some((msg: Message) => msg.id === message.id)
+        if (messageExistsById) {
+          console.log('消息已存在（相同ID），跳过添加:', message.id)
+          return
+        }
+        
+        // 检查是否有临时消息需要更新（相同内容、相同发送者、相近时间）
+        const tempMessageIndex = existingMessages.findIndex((msg: Message) => {
+          // 检查是否是临时消息（发送中状态）且内容相同
+          const isTempMessage = msg.status === 'sending' && 
+                               msg.content === message.content
+          
+          // 检查发送者是否相同（兼容不同字段名）
+          const msgSenderId = msg.fromUserId || msg.senderId
+          const newMsgSenderId = message.fromUserId || message.senderId
+          const isSameSender = msgSenderId && newMsgSenderId && 
+                              msgSenderId.toString() === newMsgSenderId.toString()
+          
+          // 检查时间是否相近（5秒内）
+          const msgTime = new Date(msg.createTime).getTime()
+          const newMsgTime = new Date(message.createTime).getTime()
+          const timeDiff = Math.abs(msgTime - newMsgTime)
+          
+          return isTempMessage && isSameSender && timeDiff < 5000
+        })
+        
+        if (tempMessageIndex !== -1) {
+          // 更新临时消息为服务器返回的真实消息
+          console.log('更新临时消息:', existingMessages[tempMessageIndex].id, '->', message.id)
+          ;(this as any).messages[conversationId][tempMessageIndex] = message
+        } else {
+          // 添加新消息
           ; (this as any).messages[conversationId].push(message)
           console.log('添加新消息到会话:', conversationId, '消息ID:', message.id)
-        } else {
-          console.log('消息已存在，跳过添加:', message.id)
-          return
         }
 
         // 更新会话信息

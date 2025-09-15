@@ -15,6 +15,11 @@
 
           <!-- 消息内容 -->
           <div class="message-content">
+            <!-- 群聊中显示发送者名称（仅非自己的消息） -->
+            <div v-if="!isOwnMessage(message) && isGroupMessage()" class="sender-name">
+              {{ getSenderName(message) }}
+            </div>
+            
             <!-- 消息气泡 -->
             <div class="message-bubble" :class="getBubbleClass(message)">
               <template v-if="isImage(message)">
@@ -109,6 +114,19 @@ const getSenderAvatar = (message: Message) => {
   const senderId = message.fromUserId || message.senderId
   const sender = chatStore.getContactById(senderId)
   return sender?.avatar || 'https://avatars.githubusercontent.com/u/0?v=4'
+}
+
+// 检查是否为群聊消息
+const isGroupMessage = () => {
+  return chatStore.activeConversationId?.startsWith('group_')
+}
+
+// 获取发送者名称
+const getSenderName = (message: Message) => {
+  // 使用正确的字段名：fromUserId（兼容senderId）
+  const senderId = message.fromUserId || message.senderId
+  const sender = chatStore.getContactById(senderId)
+  return sender?.nickname || sender?.username || '未知用户'
 }
 
 const getBubbleClass = (message: Message) => {
@@ -224,6 +242,13 @@ watch(showTypingIndicator, () => {
 .message-text {
   line-height: 1.4;
   font-size: 14px;
+}
+
+.sender-name {
+  font-size: 12px;
+  color: #666;
+  margin-bottom: 2px;
+  padding-left: 8px;
 }
 
 .message-status {
