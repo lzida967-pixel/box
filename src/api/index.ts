@@ -241,6 +241,35 @@ export const chatApi = {
   },
 
   /**
+   * 发送群聊图片消息（二进制存储）
+   * 先上传图片获取ID，然后发送群聊消息
+   */
+  sendGroupImage: async (groupId: number, file: File): Promise<AxiosResponse<ApiResponse<any>>> => {
+    try {
+      const fd = new FormData()
+      fd.append('file', file) // 确保表单键为 file
+      const imgResp = await api.post('/images', fd) as AxiosResponse<ApiResponse<{ id: number }>>
+      const imageIdRaw = (imgResp.data && (imgResp.data as any).data && (imgResp.data as any).data.id) ?? (imgResp.data as any).id
+      const imageId = Number(imageIdRaw)
+      if (!Number.isFinite(imageId)) {
+        console.error('[上传群聊图片] 返回体异常:', imgResp?.data)
+        throw new Error('群聊图片上传失败：未获得有效的图片ID')
+      }
+      return await api.post('/messages/group', {
+        groupId: groupId,
+        content: String(imageId),
+        messageType: 2
+      })
+    } catch (error: any) {
+      const status = error?.response?.status
+      const respData = error?.response?.data
+      const msg = respData?.message || error?.message
+      console.error('[群聊图片上传失败详情]', { status, respData, message: msg })
+      throw error
+    }
+  },
+
+  /**
    * 获取会话列表
    */
   getConversations: (): Promise<AxiosResponse<ApiResponse<any[]>>> => {
@@ -385,7 +414,10 @@ export const fileApi = {
 // ==================== 图片（二进制）获取API ====================
 export const imageApi = {
   /** 获取图片二进制URL（供前端img使用） */
-  url: (id: string | number) => `http://localhost:8080/api/images/${id}`
+  url: (id: string | number) => `http://localhost:8080/api/images/${id}`,
+  
+  /** 通过文件名获取图片URL */
+  urlByFilename: (filename: string) => `http://localhost:8080/api/images/file/${encodeURIComponent(filename)}`
 }
 
 // ==================== 群聊相关API ====================

@@ -465,13 +465,16 @@ export const useChatStore = defineStore('chat', {
 
       const message: Message = {
         id: Date.now(),
-        senderId: currentUser.id,
-        receiverId: parseInt(receiverId),
+        fromUserId: currentUser.id,
+        toUserId: parseInt(receiverId),
+        sendTime: new Date().toISOString(),
         content,
         messageType: 'text',
         status: 'sending',
         createTime: new Date().toISOString(),
         updateTime: new Date().toISOString(),
+        senderId: currentUser.id,
+        receiverId: parseInt(receiverId),
         isRecalled: false
       }
 
@@ -534,7 +537,7 @@ export const useChatStore = defineStore('chat', {
     },
 
     // 发送WebSocket消息
-    sendWebSocketMessage(content: string) {
+    sendWebSocketMessage(content: string, messageType: 'text' | 'image' = 'text') {
       const authStore = useAuthStore()
       const currentUser = authStore.userInfo
       if (!(this as any).activeConversationId || !currentUser) return
@@ -556,22 +559,25 @@ export const useChatStore = defineStore('chat', {
         
         // 通过WebSocket发送群聊消息
         const wsService = getWebSocketService()
-        wsService.sendGroupMessage(groupId, content)
+        const msgType = messageType === 'image' ? 2 : 1
+        wsService.sendGroupMessage(groupId, content, msgType)
         
         // 创建群聊消息对象
         message = {
           id: Date.now(), // 临时ID，服务器会返回真实ID
-          senderId: currentUser.id,
+          fromUserId: currentUser.id,
           groupId: groupId,
+          sendTime: new Date().toISOString(),
           content,
-          messageType: 'text',
+          messageType: messageType,
           status: 'sending',
           createTime: new Date().toISOString(),
           updateTime: new Date().toISOString(),
+          senderId: currentUser.id,
           isRecalled: false
         }
         
-        console.log('发送群聊消息:', { groupId, content })
+        console.log('发送群聊消息:', { groupId, content, messageType })
       } else {
         // 私聊消息处理
         const receiverId = conversation.participantIds.find((id: string) => id !== currentUser.id.toString())
@@ -579,22 +585,26 @@ export const useChatStore = defineStore('chat', {
         
         // 通过WebSocket发送私聊消息
         const wsService = getWebSocketService()
-        wsService.sendPrivateMessage(parseInt(receiverId), content)
+        const msgType = messageType === 'image' ? 2 : 1
+        wsService.sendPrivateMessage(parseInt(receiverId), content, msgType)
         
         // 创建私聊消息对象
         message = {
           id: Date.now(), // 临时ID，服务器会返回真实ID
-          senderId: currentUser.id,
-          receiverId: parseInt(receiverId),
+          fromUserId: currentUser.id,
+          toUserId: parseInt(receiverId),
+          sendTime: new Date().toISOString(),
           content,
-          messageType: 'text',
+          messageType: messageType,
           status: 'sending',
           createTime: new Date().toISOString(),
           updateTime: new Date().toISOString(),
+          senderId: currentUser.id,
+          receiverId: parseInt(receiverId),
           isRecalled: false
         }
         
-        console.log('发送私聊消息:', { receiverId, content })
+        console.log('发送私聊消息:', { receiverId, content, messageType })
       }
 
       // 通过addMessage方法添加消息，确保去重逻辑生效
@@ -603,6 +613,19 @@ export const useChatStore = defineStore('chat', {
       // 更新会话时间戳
       conversation.timestamp = new Date()
       conversation.lastMessage = message
+    },
+
+    // 发送群聊图片消息（通过WebSocket）
+    sendGroupImageMessage(groupId: number, imageId: string) {
+      const authStore = useAuthStore()
+      const currentUser = authStore.userInfo
+      if (!currentUser) return
+
+      // 通过WebSocket发送群聊图片消息
+      const wsService = getWebSocketService()
+      wsService.sendGroupImageMessage(groupId, imageId)
+      
+      console.log('通过WebSocket发送群聊图片消息:', { groupId, imageId })
     },
 
     // 添加接收到的消息
@@ -1131,13 +1154,16 @@ export const useChatStore = defineStore('chat', {
           for (const msg of offlineMessages) {
             const message: Message = {
               id: msg.id,
-              senderId: msg.fromUserId,
-              receiverId: msg.toUserId,
+              fromUserId: msg.fromUserId,
+              toUserId: msg.toUserId,
+              sendTime: msg.createTime || msg.sendTime,
               content: msg.content,
               messageType: this.convertMessageType(msg.messageType || 1),
               status: 'delivered',
               createTime: msg.createTime || msg.sendTime,
               updateTime: msg.updateTime,
+              senderId: msg.fromUserId,
+              receiverId: msg.toUserId,
               isRecalled: false
             }
 

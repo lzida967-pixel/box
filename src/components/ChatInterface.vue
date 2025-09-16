@@ -327,13 +327,19 @@ const isImage = (message: Message) => {
 const imageSrc = (message: Message) => {
   const raw = message.content
   if (!raw || raw === '__uploading__') return ''
+  
+  // 尝试解析为数字ID（旧格式）
   const idNum = Number(raw)
-  if (!Number.isFinite(idNum)) {
-    console.warn('图片消息content不是数字ID，忽略渲染图片：', raw, message)
-    return ''
+  if (Number.isFinite(idNum)) {
+    const url = imageApi.url(idNum)
+    console.debug('生成图片URL（ID格式）', { id: idNum, url, messageType: message.messageType, message })
+    return url
   }
-  const url = imageApi.url(idNum)
-  console.debug('生成图片URL', { id: idNum, url, messageType: message.messageType, message })
+  
+  // 如果不是数字ID，则认为是文件名格式
+  // 构建图片URL，假设后端提供了根据文件名获取图片的接口
+  const url = imageApi.urlByFilename ? imageApi.urlByFilename(raw) : `${import.meta.env.VITE_API_BASE_URL}/api/images/file/${encodeURIComponent(raw)}`
+  console.debug('生成图片URL（文件名格式）', { filename: raw, url, messageType: message.messageType, message })
   return url
 }
 
@@ -450,7 +456,7 @@ const checkFriendship = async (friendId: number): Promise<boolean> => {
   
   try {
     // 首先检查本地联系人列表中是否还有这个好友
-    const isInContactList = chatStore.contacts.some(contact => contact.id === friendId)
+    const isInContactList = chatStore.contacts.some((contact: any) => contact.id === friendId)
     if (!isInContactList) {
       return false
     }
@@ -464,12 +470,12 @@ const checkFriendship = async (friendId: number): Promise<boolean> => {
     
     if (response.data) {
       // 格式1: {code: 200, message: "...", data: {isFriend: boolean}}
-      if (response.data.data && typeof response.data.data.isFriend === 'boolean') {
-        isFriend = response.data.data.isFriend
+      if ((response.data as any).data && typeof (response.data as any).data.isFriend === 'boolean') {
+        isFriend = (response.data as any).data.isFriend
       }
       // 格式2: {isFriend: boolean}
-      else if (typeof response.data.isFriend === 'boolean') {
-        isFriend = response.data.isFriend
+      else if (typeof (response.data as any).isFriend === 'boolean') {
+        isFriend = (response.data as any).isFriend
       }
       // 格式3: 直接是boolean值
       else if (typeof response.data === 'boolean') {
@@ -486,7 +492,7 @@ const checkFriendship = async (friendId: number): Promise<boolean> => {
   } catch (error) {
     console.error('检查好友关系失败:', error)
     // 如果API调用失败，回退到本地检查
-    return chatStore.contacts.some(contact => contact.id === friendId)
+    return chatStore.contacts.some((contact: any) => contact.id === friendId)
   }
 }
 
@@ -528,68 +534,157 @@ const handleImageSelect = async (event: Event) => {
   const files = target.files
   try {
     if (!chatStore.activeConversationId) return
-    // 解析当前会话的对方ID
+    
     const conv = chatStore.activeConversation
     const me = authStore.userInfo?.id
-    const friendIdStr = conv?.participantIds.find(id => id !== String(me))
-    if (!friendIdStr) return
-    const friendId = parseInt(friendIdStr)
+    if (!conv || !me) return
 
     if (files && files.length > 0) {
       for (const file of Array.from(files)) {
-        // 本地乐观消息
-        const tempId = Date.now() + Math.random()
-        const optimistic: Message = {
-          id: tempId as any,
-          fromUserId: me!,
-          toUserId: friendId,
-          content: '__uploading__', // 占位，发送成功后替换为图片ID
-          messageType: 'image',
-          status: 'sending',
-          sendTime: new Date().toISOString(),
-          createTime: new Date().toISOString(),
-          updateTime: new Date().toISOString(),
-          senderId: me!,
-          receiverId: friendId
-        }
-        // 推入当前会话消息
-        if (!chatStore.messages[chatStore.activeConversationId]) {
-          (chatStore as any).messages[chatStore.activeConversationId] = []
-        }
-        ;(chatStore as any).messages[chatStore.activeConversationId].push(optimistic)
-
-        // 上传+创建消息
-        const resp = await chatApi.sendImage(friendId, file)
-        if (resp.code === 200 && resp.data) {
-          const serverMsg = resp.data as any
-          // 后端应返回 message，其中 content=图片ID 或 data.imageId
-          const imageId = serverMsg.content ?? serverMsg.imageId ?? serverMsg.data?.imageId
-          // 找回本地临时消息并更新
-          const list = (chatStore as any).messages[chatStore.activeConversationId] as Message[]
-          const found = list.find(m => m.id === tempId)
-          if (found) {
-            found.id = serverMsg.id ?? found.id
-            found.status = 'delivered'
-            found.messageType = 'image'
-            found.content = String(imageId)
-            found.updateTime = new Date().toISOString()
-          }
+        // 检查是否是群聊会话
+        if (conv.type === 'group') {
+          // 群聊图片发送
+          await handleGroupImageSend(file, conv)
         } else {
-          ElMessage.error('图片发送失败')
-          // 标记失败
-          const list = (chatStore as any).messages[chatStore.activeConversationId] as Message[]
-          const found = list.find(m => m.id === tempId)
-          if (found) {
-            found.status = 'sent'
-          }
+          // 私聊图片发送
+          await handlePrivateImageSend(file, conv, me)
         }
       }
     }
-  } catch (e:any) {
+  } catch (e: any) {
     console.error(e)
     ElMessage.error('图片发送失败')
   } finally {
     target.value = ''
+  }
+}
+
+// 处理私聊图片发送
+const handlePrivateImageSend = async (file: File, conv: any, me: number) => {
+  const friendIdStr = conv.participantIds.find((id: string) => id !== String(me))
+  if (!friendIdStr) return
+  const friendId = parseInt(friendIdStr)
+
+  // 本地乐观消息
+  const tempId = Date.now() + Math.random()
+  const optimistic: Message = {
+    id: tempId as any,
+    fromUserId: me,
+    toUserId: friendId,
+    content: '__uploading__', // 占位，发送成功后替换为图片ID
+    messageType: 'image',
+    status: 'sending',
+    sendTime: new Date().toISOString(),
+    createTime: new Date().toISOString(),
+    updateTime: new Date().toISOString(),
+    senderId: me,
+    receiverId: friendId
+  }
+  
+  // 推入当前会话消息
+  if (!chatStore.messages[chatStore.activeConversationId!]) {
+    (chatStore as any).messages[chatStore.activeConversationId!] = []
+  }
+  ;(chatStore as any).messages[chatStore.activeConversationId!].push(optimistic)
+
+  try {
+    // 上传+创建消息
+    const resp = await chatApi.sendImage(friendId, file)
+    if ((resp as any).code === 200 && (resp as any).data) {
+      const serverMsg = (resp as any).data as any
+      // 后端可能返回图片ID或文件名，都支持
+      const imageContent = serverMsg.content ?? serverMsg.imageId ?? serverMsg.data?.imageId ?? serverMsg.data?.filename ?? file.name
+      // 找回本地临时消息并更新
+      const list = (chatStore as any).messages[chatStore.activeConversationId!] as Message[]
+      const found = list.find(m => m.id === tempId)
+      if (found) {
+        found.id = serverMsg.id ?? found.id
+        found.status = 'delivered'
+        found.messageType = 'image'
+        found.content = String(imageContent)
+        found.updateTime = new Date().toISOString()
+      }
+      console.log('私聊图片发送成功:', { friendId, imageContent, serverMsg })
+    } else {
+      throw new Error('私聊图片发送失败')
+    }
+  } catch (error) {
+    console.error('私聊图片发送失败:', error)
+    // 标记失败
+    const list = (chatStore as any).messages[chatStore.activeConversationId!] as Message[]
+    const found = list.find(m => m.id === tempId)
+    if (found) {
+      found.status = 'sent'
+      found.content = '图片发送失败'
+    }
+    throw error
+  }
+}
+
+// 处理群聊图片发送
+const handleGroupImageSend = async (file: File, conv: any) => {
+  const me = authStore.userInfo?.id
+  if (!me) return
+  
+  // 从会话ID中提取群ID
+  const groupId = parseInt(chatStore.activeConversationId!.replace('group_', ''))
+  if (isNaN(groupId)) {
+    console.error('无效的群ID:', chatStore.activeConversationId)
+    return
+  }
+
+  // 本地乐观消息
+  const tempId = Date.now() + Math.random()
+  const optimistic: Message = {
+    id: tempId as any,
+    fromUserId: me,
+    groupId: groupId,
+    content: '__uploading__', // 占位，发送成功后替换为图片ID
+    messageType: 'image',
+    status: 'sending',
+    sendTime: new Date().toISOString(),
+    createTime: new Date().toISOString(),
+    updateTime: new Date().toISOString(),
+    senderId: me
+  }
+  
+  // 推入当前会话消息
+  if (!chatStore.messages[chatStore.activeConversationId!]) {
+    (chatStore as any).messages[chatStore.activeConversationId!] = []
+  }
+  ;(chatStore as any).messages[chatStore.activeConversationId!].push(optimistic)
+
+  try {
+    // 上传+创建群聊消息
+    const resp = await chatApi.sendGroupImage(groupId, file)
+    if ((resp as any).code === 200 && (resp as any).data) {
+      const serverMsg = (resp as any).data as any
+      // 后端可能返回图片ID或文件名，都支持
+      const imageContent = serverMsg.content ?? serverMsg.imageId ?? serverMsg.data?.imageId ?? serverMsg.data?.filename ?? file.name
+      // 找回本地临时消息并更新
+      const list = (chatStore as any).messages[chatStore.activeConversationId!] as Message[]
+      const found = list.find(m => m.id === tempId)
+      if (found) {
+        found.id = serverMsg.id ?? found.id
+        found.status = 'delivered'
+        found.messageType = 'image'
+        found.content = String(imageContent)
+        found.updateTime = new Date().toISOString()
+      }
+      console.log('群聊图片发送成功:', { groupId, imageContent, serverMsg })
+    } else {
+      throw new Error('群聊图片发送失败')
+    }
+  } catch (error) {
+    console.error('群聊图片发送失败:', error)
+    // 标记失败
+    const list = (chatStore as any).messages[chatStore.activeConversationId!] as Message[]
+    const found = list.find(m => m.id === tempId)
+    if (found) {
+      found.status = 'sent'
+      found.content = '图片发送失败'
+    }
+    throw error
   }
 }
 

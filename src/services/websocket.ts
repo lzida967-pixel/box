@@ -329,6 +329,18 @@ export class WebSocketService {
   }
 
   /**
+   * 发送群聊图片消息
+   */
+  sendGroupImageMessage(groupId: number, imageId: string): void {
+    this.send({
+      type: 'group',
+      groupId,
+      content: imageId,
+      messageType: 2 // 图片消息类型
+    })
+  }
+
+  /**
    * 发送输入指示器
    */
   sendTypingIndicator(toUserId: number, isTyping: boolean): void {

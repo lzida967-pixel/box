@@ -13,6 +13,7 @@ export interface User {
   gender?: number // 性别: 0-未知, 1-男, 2-女
   name?: string // 显示名称（兼容字段）
   remark?: string // 用户备注
+  groupName?: string // 群组名称（用于群聊场景）
 }
 
 // 好友关系
@@ -96,8 +97,8 @@ export interface UserAccount {
 export interface Message {
   id: number
   fromUserId: number  // 发送者ID（与后端保持一致）
-  toUserId: number    // 接收者ID（与后端保持一致）
-  groupId?: number
+  toUserId?: number   // 接收者ID（私聊时必需，群聊时可选）
+  groupId?: number    // 群聊ID（群聊时必需，私聊时可选）
   content: string
   messageType: number | 'text' | 'image' | 'file' | 'system'  // 支持数字和字符串类型
   status: number | 'sending' | 'sent' | 'delivered' | 'read' | 'recalled'  // 支持数字和字符串类型
