@@ -459,17 +459,10 @@ export const groupApi = {
   },
 
   /**
-   * 移除群成员
+   * 移除群成员（批量）
    */
-  removeMembers: (groupId: number, memberIds: number[]): Promise<AxiosResponse<ApiResponse<void>>> => {
-    return api.post(`/group/${groupId}/remove`, { memberIds })
-  },
-
-  /**
-   * 移除单个群成员
-   */
-  removeMember: (groupId: number, memberId: number): Promise<AxiosResponse<ApiResponse<void>>> => {
-    return api.delete(`/group/${groupId}/member/${memberId}`)
+  removeMembers: (groupId: number, memberIds: number[]): Promise<AxiosResponse<ApiResponse<boolean>>> => {
+    return api.delete(`/group/${groupId}/members`, { data: { memberIds } })
   },
 
   /**

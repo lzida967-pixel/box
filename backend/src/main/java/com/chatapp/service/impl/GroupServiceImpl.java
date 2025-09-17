@@ -198,7 +198,7 @@ public class GroupServiceImpl implements GroupService {
             List<GroupMember> members = memberMapper.selectActiveMembersByGroupId(groupId);
             if (!members.isEmpty()) {
                 List<Long> memberIds = members.stream().map(GroupMember::getId).collect(Collectors.toList());
-                memberMapper.removeMembers(memberIds);
+                memberMapper.removeMembers(groupId, memberIds);
             }
 
             return result > 0;
@@ -334,7 +334,7 @@ public class GroupServiceImpl implements GroupService {
             }
 
             if (!validMemberIds.isEmpty()) {
-                memberMapper.removeMembers(validMemberIds);
+                memberMapper.removeMembers(groupId, validMemberIds);
                 
                 // 更新群组成员数量
                 int currentCount = memberMapper.countActiveMembers(groupId);
@@ -344,7 +344,7 @@ public class GroupServiceImpl implements GroupService {
             return !validMemberIds.isEmpty();
         } catch (Exception e) {
             logger.error("移除群成员失败", e);
-            return false;
+            throw new RuntimeException("移除群成员失败", e);
         }
     }
 

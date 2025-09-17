@@ -180,6 +180,7 @@
         <foreach collection="memberIds" item="id" open="(" separator="," close=")">
             #{id}
         </foreach>
+        AND group_id = #{groupId}
     </update>
 
     <!-- 删除群成员（软删除） -->

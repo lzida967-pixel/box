@@ -17,6 +17,7 @@ import java.awt.*;
 import java.awt.image.BufferedImage;
 import java.io.ByteArrayOutputStream;
 import java.time.LocalDateTime;
+import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
@@ -630,10 +631,19 @@ public class GroupController {
             }
             
             Long userId = userOpt.get().getId();
-            @SuppressWarnings("unchecked")
-            List<Long> memberIds = (List<Long>) request.get("memberIds");
+            
+            // 安全地转换memberIds为Long类型列表
+            List<Long> memberIds = new ArrayList<>();
+            Object memberIdsObj = request.get("memberIds");
+            if (memberIdsObj instanceof List) {
+                for (Object id : (List<?>) memberIdsObj) {
+                    if (id instanceof Number) {
+                        memberIds.add(((Number) id).longValue());
+                    }
+                }
+            }
 
-            if (memberIds == null || memberIds.isEmpty()) {
+            if (memberIds.isEmpty()) {
                 result.put("code", 400);
                 result.put("message", "请选择要移除的成员");
                 result.put("data", false);

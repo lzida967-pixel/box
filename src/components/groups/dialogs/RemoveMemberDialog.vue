@@ -31,8 +31,9 @@
         <el-avatar :src="getUserAvatar(member)" :size="40" />
         <div class="member-info">
           <div class="member-name">
-            {{ member.memberNickname || member.nickname || member.user?.username }}
+            {{ member.memberNickname || member.nickname || member.username }}
             <el-tag v-if="member.memberRole === 2" type="warning" size="small">管理员</el-tag>
+            <el-tag v-else-if="member.memberRole === 3" type="danger" size="small">群主</el-tag>
           </div>
           <div class="member-status">
             <span v-if="member.muteUntil" class="muted-status">已禁言</span>
@@ -57,7 +58,7 @@
           class="selected-member"
         >
           <el-avatar :src="getUserAvatar(member)" :size="24" />
-          <span class="selected-name">{{ member.memberNickname || member.nickname || member.user?.username }}</span>
+          <span class="selected-name">{{ member.memberNickname || member.nickname || member.username }}</span>
           <el-icon class="remove-icon" @click="removeMember(member)">
             <Close />
           </el-icon>
@@ -83,8 +84,9 @@
 
 <script setup lang="ts">
 import { ref, computed, watch } from 'vue'
-import { ElMessage, ElMessageBox } from 'element-plus'
-import { Close } from '@element-plus/icons-vue'
+import ElMessage from 'element-plus/es/components/message/index'
+import ElMessageBox from 'element-plus/es/components/message-box/index'
+import { CircleClose as Close } from '@element-plus/icons-vue'
 import { useAuthStore } from '@/stores/auth'
 import { groupApi } from '@/api'
 import type { GroupMember } from '@/types'
@@ -123,7 +125,7 @@ const currentUserRole = computed(() => {
   console.log('当前用户查找 - authStore.userInfo.id:', currentUserId, '类型:', typeof currentUserId)
   console.log('当前用户查找 - allMembers:', allMembers.value.map(m => ({ userId: m.userId, type: typeof m.userId })))
   console.log('当前用户查找 - 找到的成员:', currentMember)
-  return currentMember?.memberRole
+  return currentMember?.role
 })
 
 // 可移除的成员（先简化逻辑，显示所有成员除了自己）
@@ -154,7 +156,7 @@ const filteredMembers = computed(() => {
   
   const keyword = searchText.value.toLowerCase()
   return removableMembers.value.filter(member => 
-    (member.memberNickname || member.nickname || member.user?.username || '').toLowerCase().includes(keyword)
+    (member.memberNickname || member.nickname || member.username || '').toLowerCase().includes(keyword)
   )
 })
 
@@ -168,7 +170,7 @@ const loadGroupMembers = async () => {
     const response = await groupApi.getGroupMembers(props.groupId)
     console.log('API响应结构:', response)
     console.log('响应数据:', response.data)
-    // 根据API响应结构，数据直接在response.data中
+    // 响应拦截器已经返回了response.data，所以这里的response就是{code, data, message}格式
     allMembers.value = response.data || []
     console.log('实时查询的成员列表:', allMembers.value, '长度:', allMembers.value.length)
   } catch (error: any) {
@@ -209,7 +211,7 @@ const handleRemove = async () => {
   if (!props.groupId || selectedMembers.value.length === 0) return
 
   try {
-    const memberNames = selectedMembers.value.map(m => m.nickname || m.user?.username).join('、')
+    const memberNames = selectedMembers.value.map(m => m.memberNickname || m.nickname || m.username).join('、')
     
     await ElMessageBox.confirm(
       `确定要移除以下成员吗？\n${memberNames}`,
@@ -223,12 +225,36 @@ const handleRemove = async () => {
 
     loading.value = true
     
-    const memberIds = selectedMembers.value.map(m => m.userId)
-    await groupApi.removeMembers(props.groupId, memberIds)
+    console.log('选中的成员:', selectedMembers.value)
+    console.log('userId类型:', selectedMembers.value.map(m => ({ userId: m.userId, type: typeof m.userId })))
     
-    ElMessage.success(`成功移除 ${selectedMembers.value.length} 位成员`)
-    emit('success')
-    handleClose()
+    // 调试：检查成员数据的实际类型
+    console.log('选中的成员数据:', selectedMembers.value.map(m => ({
+      userId: m.userId,
+      type: typeof m.userId,
+      parsed: Number(m.userId)
+    })))
+    
+    // 发送群成员记录的ID，而不是userId
+    const memberIds = selectedMembers.value.map(m => Number(m.id))
+    
+    console.log('发送的memberIds (成员记录ID):', memberIds, '类型:', memberIds.map(id => typeof id))
+    console.log('对应的userIds:', selectedMembers.value.map(m => m.userId))
+    const response = await groupApi.removeMembers(props.groupId, memberIds)
+    
+    console.log('API响应:', response)
+    
+    // 检查API响应是否成功 - response已经是{code, data, message}格式
+    if (response.code === 200 && response.data === true) {
+      ElMessage.success(`成功移除 ${selectedMembers.value.length} 位成员`)
+      emit('success')
+      handleClose()
+    } else {
+      // 提供更详细的错误信息
+      const errorMsg = response.message || '移除成员失败'
+      console.error('移除成员API响应异常:', response)
+      throw new Error(errorMsg)
+    }
   } catch (error: any) {
     if (error !== 'cancel') {
       console.error('移除成员失败:', error)

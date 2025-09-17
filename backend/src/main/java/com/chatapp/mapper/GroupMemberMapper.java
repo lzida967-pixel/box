@@ -101,7 +101,7 @@ public interface GroupMemberMapper {
     /**
      * 批量移除群成员
      */
-    int removeMembers(@Param("memberIds") List<Long> memberIds);
+    int removeMembers(@Param("groupId") Long groupId, @Param("memberIds") List<Long> memberIds);
 
     /**
      * 删除群成员（软删除）

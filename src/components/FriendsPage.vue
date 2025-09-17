@@ -337,7 +337,7 @@ onMounted(() => {
   margin: 0 20px 20px 20px;
   border-radius: 8px;
   overflow: hidden;
-  box-shadow: 0 1px 2px rgba(0, 0, 0, 极速版0.1);
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.1);
 }
 
 .new-friends-item {
@@ -416,7 +416,7 @@ onMounted(() => {
 
 .friend-name {
   font-weight: 500;
-  font-size: 极速版16px;
+  font-size: 16px;
   color: #333;
   margin-bottom: 4px;
 }

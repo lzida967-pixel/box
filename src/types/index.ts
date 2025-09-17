@@ -154,12 +154,22 @@ export interface GroupMember {
   id: number
   groupId: number
   userId: number
-  role: 'OWNER' | 'ADMIN' | 'MEMBER'
-  nickname?: string
-  joinedAt: string
-  isMuted: boolean
+  username: string // 后端直接返回的用户名
+  nickname?: string // 用户昵称
+  memberRole: number // 后端使用数字：1-普通成员，2-管理员，3-群主
+  role?: 'OWNER' | 'ADMIN' | 'MEMBER' // 前端兼容字段
+  memberNickname?: string // 后端字段名：群内昵称
+  joinTime?: string // 后端字段名
+  joinedAt?: string // 前端兼容字段
+  isMuted?: boolean
   mutedUntil?: string
+  muteUntil?: string // 后端字段名
+  status?: number // 成员状态
+  remark?: string // 群备注
+  inviteUserId?: number // 邀请人ID
+  inviteUserName?: string // 邀请人名称
   user?: User
+  avatar?: string // 成员头像
 }
 
 // 群公告
