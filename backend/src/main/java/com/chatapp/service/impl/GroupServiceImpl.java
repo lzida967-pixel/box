@@ -280,7 +280,7 @@ public class GroupServiceImpl implements GroupService {
             int addedCount = 0;
 
             for (Long userId : userIds) {
-                // 检查用户是否已经是群成员
+                // 检查用户是否已经是活跃群成员
                 if (!isMember(groupId, userId)) {
                     // 检查群组成员数量限制
                     if (group.getMemberCount() + addedCount >= group.getMaxMembers()) {
@@ -288,10 +288,24 @@ public class GroupServiceImpl implements GroupService {
                         break;
                     }
 
-                    GroupMember member = new GroupMember(groupId, userId, 1); // 1-普通成员
-                    member.setInviteUserId(inviterId);
-                    newMembers.add(member);
-                    addedCount++;
+                    // 检查是否存在已删除的成员记录
+                    GroupMember existingMember = memberMapper.selectMemberByGroupAndUserIncludeDeleted(groupId, userId);
+                    if (existingMember != null && existingMember.getStatus() == 0) {
+                        // 重新激活已删除的成员记录
+                        existingMember.setStatus(1);
+                        existingMember.setInviteUserId(inviterId);
+                        existingMember.setJoinTime(LocalDateTime.now());
+                        existingMember.setUpdateTime(LocalDateTime.now());
+                        memberMapper.updateMember(existingMember);
+                        addedCount++;
+                    } else if (existingMember == null) {
+                        // 创建新的成员记录
+                        GroupMember member = new GroupMember(groupId, userId, 1); // 1-普通成员
+                        member.setInviteUserId(inviterId);
+                        member.setStatus(1);
+                        newMembers.add(member);
+                        addedCount++;
+                    }
                 }
             }
 
