@@ -1,4 +1,5 @@
-`users``users`-- 创建用户表
+use chat_app;
+-- 创建用户表
 CREATE TABLE IF NOT EXISTS users (
     id BIGINT AUTO_INCREMENT PRIMARY KEY COMMENT '用户ID',
     username VARCHAR(50) NOT NULL UNIQUE COMMENT '用户名',
@@ -233,4 +234,109 @@ CREATE INDEX idx_messages_group_status ON messages(group_id, status);
 ALTER TABLE group_members ADD COLUMN remark VARCHAR(100) NULL COMMENT '我对这个群的备注（个人可见）' AFTER member_nickname;
 CREATE INDEX idx_group_members_group_role ON group_members(group_id, member_role);
 CREATE INDEX idx_group_members_group_status ON group_members(group_id, STATUS);
-ALTER TABLE chat_groups
+
+
+-- 二进制图片存储表
+CREATE TABLE IF NOT EXISTS images (
+                                      id BIGINT AUTO_INCREMENT PRIMARY KEY COMMENT '图片ID',
+                                      content_type VARCHAR(100) NOT NULL COMMENT 'MIME类型',
+                                      data LONGBLOB NOT NULL COMMENT '二进制数据',
+                                      size BIGINT NOT NULL COMMENT '大小(字节)',
+                                      create_time TIMESTAMP DEFAULT CURRENT_TIMESTAMP COMMENT '创建时间'
+) ENGINE=INNODB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci COMMENT='二进制图片表';
+-- 1) 扩展 images 表，增加 original_name
+ALTER TABLE images
+    ADD COLUMN original_name VARCHAR(255) NULL COMMENT '原始文件名' AFTER content_type;
+
+-- 2) 可选：为 original_name 添加索引（提升迁移与查询按名查找性能）
+CREATE INDEX idx_images_original_name ON images (original_name);
+
+-- 注意：执行本迁移后，需要将已有 images 记录的 original_name 补齐。
+-- 若历史插入未保存文件名，无法可靠映射；仅能迁移那些上传时我们保存过 original_name 的记录。
+
+
+-- 检查 messages 表结构
+DESCRIBE messages;
+
+-- 检查是否存在图片相关字段，如果不存在则添加
+SELECT COLUMN_NAME
+FROM INFORMATION_SCHEMA.COLUMNS
+WHERE TABLE_SCHEMA = 'chat_app'
+  AND TABLE_NAME = 'messages'
+  AND COLUMN_NAME IN ('file_url', 'file_name', 'file_size', 'message_type');
+
+-- 如果上面的查询结果少于4行，说明字段不完整，执行以下语句添加缺失字段：
+
+-- 添加 message_type 字段（如果不存在）
+SET @sql = (SELECT IF(
+                           (SELECT COUNT(*) FROM INFORMATION_SCHEMA.COLUMNS
+                            WHERE TABLE_SCHEMA = 'chat_app' AND TABLE_NAME = 'messages' AND COLUMN_NAME = 'message_type') > 0,
+                           'SELECT "message_type字段已存在" as result',
+                           'ALTER TABLE messages ADD COLUMN message_type INT DEFAULT 1 COMMENT "消息类型：1-文本，2-图片"'
+                   ));
+PREPARE stmt FROM @sql;
+EXECUTE stmt;
+DEALLOCATE PREPARE stmt;
+
+-- 添加 file_url 字段（如果不存在）
+SET @sql = (SELECT IF(
+                           (SELECT COUNT(*) FROM INFORMATION_SCHEMA.COLUMNS
+                            WHERE TABLE_SCHEMA = 'chat_app' AND TABLE_NAME = 'messages' AND COLUMN_NAME = 'file_url') > 0,
+                           'SELECT "file_url字段已存在" as result',
+                           'ALTER TABLE messages ADD COLUMN file_url VARCHAR(500) COMMENT "文件URL"'
+                   ));
+PREPARE stmt FROM @sql;
+EXECUTE stmt;
+DEALLOCATE PREPARE stmt;
+
+-- 添加 file_name 字段（如果不存在）
+SET @sql = (SELECT IF(
+                           (SELECT COUNT(*) FROM INFORMATION_SCHEMA.COLUMNS
+                            WHERE TABLE_SCHEMA = 'chat_app' AND TABLE_NAME = 'messages' AND COLUMN_NAME = 'file_name') > 0,
+                           'SELECT "file_name字段已存在" as result',
+                           'ALTER TABLE messages ADD COLUMN file_name VARCHAR(255) COMMENT "文件名"'
+                   ));
+PREPARE stmt FROM @sql;
+EXECUTE stmt;
+DEALLOCATE PREPARE stmt;
+
+-- 添加 file_size 字段（如果不存在）
+SET @sql = (SELECT IF(
+                           (SELECT COUNT(*) FROM INFORMATION_SCHEMA.COLUMNS
+                            WHERE TABLE_SCHEMA = 'chat_app' AND TABLE_NAME = 'messages' AND COLUMN_NAME = 'file_size') > 0,
+                           'SELECT "file_size字段已存在" as result',
+                           'ALTER TABLE messages ADD COLUMN file_size BIGINT COMMENT "文件大小（字节）"'
+                   ));
+PREPARE stmt FROM @sql;
+EXECUTE stmt;
+DEALLOCATE PREPARE stmt;
+
+-- 创建索引（如果不存在）
+SET @sql = (SELECT IF(
+                           (SELECT COUNT(*) FROM INFORMATION_SCHEMA.STATISTICS
+                            WHERE TABLE_SCHEMA = 'chat_app' AND TABLE_NAME = 'messages' AND INDEX_NAME = 'idx_message_type') > 0,
+                           'SELECT "idx_message_type索引已存在" as result',
+                           'CREATE INDEX idx_message_type ON messages(message_type)'
+                   ));
+PREPARE stmt FROM @sql;
+EXECUTE stmt;
+DEALLOCATE PREPARE stmt;
+
+SET @sql = (SELECT IF(
+                           (SELECT COUNT(*) FROM INFORMATION_SCHEMA.STATISTICS
+                            WHERE TABLE_SCHEMA = 'chat_app' AND TABLE_NAME = 'messages' AND INDEX_NAME = 'idx_file_url') > 0,
+                           'SELECT "idx_file_url索引已存在" as result',
+                           'CREATE INDEX idx_file_url ON messages(file_url)'
+                   ));
+PREPARE stmt FROM @sql;
+EXECUTE stmt;
+DEALLOCATE PREPARE stmt;
+
+-- 最后检查表结构
+DESCRIBE messages;
+
+-- 检查最近的消息数据
+SELECT id, from_user_id, to_user_id, content, message_type, file_url, file_name, file_size, create_time
+FROM messages
+ORDER BY id DESC
+LIMIT 5;
