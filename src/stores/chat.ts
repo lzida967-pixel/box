@@ -94,24 +94,36 @@ export const useChatStore = defineStore('chat', {
     sortedConversations: (state: ChatState): Conversation[] => {
       const authStore = useAuthStore()
       const currentUserId = authStore.userInfo?.id
-      if (!currentUserId) return []
+      console.log('计算sortedConversations，当前用户ID:', currentUserId)
+      console.log('所有会话数量:', state.conversations.length)
+      
+      if (!currentUserId) {
+        console.log('当前用户ID为空，返回空数组')
+        return []
+      }
 
-      return [...state.conversations]
+      const result = [...state.conversations]
         .filter((conv: Conversation) => {
           // 显示有消息的会话，或者当前活跃的会话，或者有未读消息的会话
           const hasMessages = state.messages[conv.id] && state.messages[conv.id].length > 0
           const isActiveConversation = conv.id === state.activeConversationId
           const hasUnreadMessages = conv.unreadCount > 0
           
+          console.log(`会话 ${conv.id} - 有消息: ${hasMessages}, 是活跃会话: ${isActiveConversation}, 有未读消息: ${hasUnreadMessages}`)
+          
           // 群聊会话处理 - 有消息记录、是当前活跃会话或有未读消息时显示
           if (conv.id.startsWith('group_')) {
-            return hasMessages || isActiveConversation || hasUnreadMessages
+            const shouldShow = hasMessages || isActiveConversation || hasUnreadMessages
+            console.log(`群聊会话 ${conv.id} 是否显示: ${shouldShow}`)
+            return shouldShow
           }
           
           // 私聊会话处理 - 显示有消息的会话、当前活跃的会话或有未读消息的会话
           // 确保会话包含当前用户
           const includesCurrentUser = conv.participantIds.includes(currentUserId.toString())
-          return includesCurrentUser && (hasMessages || isActiveConversation || hasUnreadMessages)
+          const shouldShow = includesCurrentUser && (hasMessages || isActiveConversation || hasUnreadMessages)
+          console.log(`私聊会话 ${conv.id} 包含当前用户: ${includesCurrentUser}, 是否显示: ${shouldShow}`)
+          return shouldShow
         })
         .sort((a: Conversation, b: Conversation) => {
           // 获取最后一条消息的时间，如果没有消息则使用会话时间戳
@@ -126,6 +138,9 @@ export const useChatStore = defineStore('chat', {
           
           return getLastMessageTime(b) - getLastMessageTime(a)
         })
+      
+      console.log('过滤后的会话数量:', result.length)
+      return result
     }
   },
 
@@ -166,6 +181,7 @@ export const useChatStore = defineStore('chat', {
 
     // 初始化用户数据
     async initializeUserData(userId: string) {
+      console.log('初始化用户数据，用户ID:', userId)
       // 清空之前的数据
       ; (this as any).conversations = []
         ; (this as any).messages = {}
@@ -183,10 +199,12 @@ export const useChatStore = defineStore('chat', {
       }
 
       // 加载该用户的会话数据（模拟从服务器获取）
-      this.loadUserConversations(userId)
+      // this.loadUserConversations(userId)
       
       // 加载真实的聊天历史记录
       await this.loadRealChatHistory(userId)
+      
+      console.log('用户数据初始化完成')
     },
 
     // 加载用户会话数据
@@ -1223,7 +1241,7 @@ export const useChatStore = defineStore('chat', {
         // 3. 加载用户的群聊消息
         await this.loadUserGroupChats(userId)
         
-        console.log('真实聊天历史记录加载完成')
+        console.log('真实聊天历史记录加载完成，会话数量:', this.conversations.length)
       } catch (error) {
         console.error('加载真实聊天历史记录失败:', error)
       }
@@ -1282,6 +1300,7 @@ export const useChatStore = defineStore('chat', {
         } else {
           console.warn('获取用户群组列表失败:', response)
         }
+        console.log('群聊消息加载完成，会话数量:', this.conversations.length)
       } catch (error) {
         console.error('加载用户群聊消息失败:', error)
       }

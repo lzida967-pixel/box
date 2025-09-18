@@ -11,6 +11,16 @@ import ChatView from './views/ChatView.vue'
 import DebugView from './views/DebugView.vue'
 import WebSocketTestView from './views/WebSocketTestView.vue'
 import FriendChatTest from './components/FriendChatTest.vue'
+
+// 移动端页面
+import MobileMessagesView from './views/MobileMessagesView.vue'
+import MobileContactsView from './views/MobileContactsView.vue'
+import MobileGroupsView from './views/MobileGroupsView.vue'
+import MobileProfileView from './views/MobileProfileView.vue'
+import MobileContactDetailView from './views/MobileContactDetailView.vue'
+import MobileGroupDetailView from './views/MobileGroupDetailView.vue'
+import MobileChatView from './views/MobileChatView.vue'
+
 import { useAuthStore } from './stores/auth'
 import './style.css'
 
@@ -36,6 +46,42 @@ const routes = [
   {
     path: '/chat',
     component: ChatView,
+    meta: { requiresAuth: true }
+  },
+  // 移动端路由
+  {
+    path: '/mobile/messages',
+    component: MobileMessagesView,
+    meta: { requiresAuth: true }
+  },
+  {
+    path: '/mobile/contacts',
+    component: MobileContactsView,
+    meta: { requiresAuth: true }
+  },
+  {
+    path: '/mobile/groups',
+    component: MobileGroupsView,
+    meta: { requiresAuth: true }
+  },
+  {
+    path: '/mobile/profile',
+    component: MobileProfileView,
+    meta: { requiresAuth: true }
+  },
+  {
+    path: '/mobile/contact/:id',
+    component: MobileContactDetailView,
+    meta: { requiresAuth: true }
+  },
+  {
+    path: '/mobile/group/:id',
+    component: MobileGroupDetailView,
+    meta: { requiresAuth: true }
+  },
+  {
+    path: '/mobile/chat/:type/:id',
+    component: MobileChatView,
     meta: { requiresAuth: true }
   },
   {
