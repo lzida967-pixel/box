@@ -52,7 +52,6 @@ declare module 'vue' {
     InviteMemberDialog: typeof import('./src/components/groups/dialogs/InviteMemberDialog.vue')['default']
     MessageInput: typeof import('./src/components/MessageInput.vue')['default']
     MessageList: typeof import('./src/components/MessageList.vue')['default']
-    MobileLayout: typeof import('./src/components/MobileLayout.vue')['default']
     MuteMemberDialog: typeof import('./src/components/groups/dialogs/MuteMemberDialog.vue')['default']
     OfflineMessageTest: typeof import('./src/components/OfflineMessageTest.vue')['default']
     RemoveMemberDialog: typeof import('./src/components/groups/dialogs/RemoveMemberDialog.vue')['default']
