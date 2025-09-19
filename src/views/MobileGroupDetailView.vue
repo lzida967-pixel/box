@@ -4,6 +4,7 @@
     <div class="header">
       <el-icon class="back-icon" @click="goBack"><ArrowLeft /></el-icon>
       <h2>群聊详情</h2>
+      <el-icon class="add-icon" @click="showCreateGroupDialog = true"><Plus /></el-icon>
     </div>
     
     <!-- 群聊详情内容 -->
@@ -42,44 +43,64 @@
       </div>
       
       <div class="action-buttons">
+        <!-- 顶部两个按钮：开始聊天 + 保存修改 -->
         <el-button 
           type="primary" 
           @click="startGroupChat(group)"
           icon="ChatDotRound"
-          size="large"
+          size="small"
           class="action-button"
         >
-          发送消息
+          开始聊天
         </el-button>
         <el-button 
-          v-if="isGroupOwner"
-          type="warning" 
-          @click="showEditGroupDialog"
-          icon="Edit"
-          size="large"
+          type="success" 
+          @click="handleTopSave"
+          icon="Check"
+          size="small"
           class="action-button"
         >
-          编辑群信息
+          保存修改
         </el-button>
-        <el-button 
-          v-if="isGroupOwner"
-          type="danger" 
-          @click="showDissolveGroupDialog"
-          icon="Delete"
-          size="large"
-          class="action-button"
-        >
-          解散群聊
-        </el-button>
+
+        <!-- 群主管理区：仅群主显示下面四个按钮 -->
+        <template v-if="isGroupOwner">
+          <div class="owner-actions">
+            <el-button plain @click="showInviteDialog = true" icon="Plus" size="small" class="action-button">
+              邀请成员
+            </el-button>
+            <el-button plain @click="showRemoveDialog = true" icon="Remove" size="small" class="action-button">
+              移除成员
+            </el-button>
+            <el-button plain @click="showMuteDialog = true" icon="Mute" size="small" class="action-button">
+              禁言成员
+            </el-button>
+            <el-button plain @click="showUnmuteDialog = true" icon="Microphone" size="small" class="action-button">
+              解除禁言
+            </el-button>
+          </div>
+
+          <el-button 
+            type="danger" 
+            @click="showDissolveGroupDialog"
+            icon="Delete"
+            size="small"
+            class="action-button"
+          >
+            解散群聊
+          </el-button>
+        </template>
+
+        <!-- 非群主：邀请好友 -->
         <el-button 
           v-else
-          type="danger" 
-          @click="showLeaveGroupDialog"
-          icon="Close"
-          size="large"
+          type="primary" 
+          @click="showInviteDialog = true"
+          icon="Plus"
+          size="small"
           class="action-button"
         >
-          退出群聊
+          邀请好友
         </el-button>
       </div>
     </div>
@@ -157,6 +178,36 @@
         </span>
       </template>
     </el-dialog>
+
+    <!-- 群主管理对话框，仅在按钮触发时展示 -->
+    <InviteMemberDialog
+      v-if="group"
+      v-model="showInviteDialog"
+      :group-id="group.id"
+    />
+    <RemoveMemberDialog
+      v-if="group"
+      v-model="showRemoveDialog"
+      :group-id="group.id"
+    />
+    <MuteMemberDialog
+      v-if="group"
+      v-model="showMuteDialog"
+      :group-id="group.id"
+      :members="[]"
+    />
+    <UnmuteMemberDialog
+      v-if="group"
+      v-model="showUnmuteDialog"
+      :group-id="group.id"
+      :members="[]"
+    />
+
+    <!-- 创建群聊对话框 -->
+    <CreateGroupDialog
+      v-model="showCreateGroupDialog"
+      @created="handleGroupCreated"
+    />
   </div>
 </template>
 
@@ -168,7 +219,12 @@ import { groupApi } from '@/api'
 import { useAuthStore } from '@/stores/auth'
 import { useChatStore } from '@/stores/chat'
 import type { ChatGroup } from '@/types'
-import { ArrowLeft } from '@element-plus/icons-vue'
+import { ArrowLeft, Plus } from '@element-plus/icons-vue'
+import InviteMemberDialog from '@/components/groups/dialogs/InviteMemberDialog.vue'
+import RemoveMemberDialog from '@/components/groups/dialogs/RemoveMemberDialog.vue'
+import MuteMemberDialog from '@/components/groups/dialogs/MuteMemberDialog.vue'
+import UnmuteMemberDialog from '@/components/groups/dialogs/UnmuteMemberDialog.vue'
+import CreateGroupDialog from '@/components/groups/dialogs/CreateGroupDialog.vue'
 
 const router = useRouter()
 const route = useRoute()
@@ -178,6 +234,13 @@ const group = ref<ChatGroup | null>(null)
 const showEditDialog = ref(false)
 const showDissolveDialog = ref(false)
 const showLeaveDialog = ref(false)
+const showCreateGroupDialog = ref(false)
+
+// 群主管理弹窗
+const showInviteDialog = ref(false)
+const showRemoveDialog = ref(false)
+const showMuteDialog = ref(false)
+const showUnmuteDialog = ref(false)
 
 const groupForm = ref({
   name: '',
@@ -186,14 +249,14 @@ const groupForm = ref({
 
 // 判断当前用户是否为群主
 const isGroupOwner = computed(() => {
-  return group.value?.ownerId === authStore.currentUserId
+  return group.value?.ownerId === authStore.userId
 })
 
 // 获取群聊详情
 const loadGroupDetail = async (groupId: string) => {
   try {
     const response = await groupApi.getGroupDetail(parseInt(groupId))
-    const groupDTO = response.data
+    const groupDTO = response.data || response
     
     // 转换为前端需要的 ChatGroup 格式
     group.value = {
@@ -247,8 +310,8 @@ const getGroupAvatar = (group: ChatGroup) => {
 // 开始群聊
 const startGroupChat = async (group: ChatGroup) => {
   // 检查用户登录状态
-  if (!authStore.currentUserId) {
-    console.error('用户未登录')
+  if (!authStore.isLoggedIn || !authStore.userId) {
+    ElMessage.error('请先登录')
     return
   }
   
@@ -264,7 +327,7 @@ const startGroupChat = async (group: ChatGroup) => {
       conversation = {
         id: conversationId,
         type: 'group',
-        participantIds: [authStore.currentUserId.toString()],
+        participantIds: [authStore.userId.toString()],
         name: group.name || group.groupName || `群聊 ${group.id}`,
         avatar: group.avatar || group.groupAvatar || '',
         description: group.description || group.groupDescription || '',
@@ -290,6 +353,15 @@ const startGroupChat = async (group: ChatGroup) => {
   } catch (error) {
     console.error('开始群聊失败:', error)
     ElMessage.error('开始群聊失败')
+  }
+}
+
+/** 顶部“保存修改”：群主打开编辑，非群主提示无权限 */
+const handleTopSave = () => {
+  if (isGroupOwner.value) {
+    showEditDialog.value = true
+  } else {
+    ElMessage.warning('仅群主可修改群信息')
   }
 }
 
@@ -361,6 +433,13 @@ const handleUpdateGroup = async () => {
   }
 }
 
+// 处理群聊创建成功
+const handleGroupCreated = (newGroup: any) => {
+  ElMessage.success('群聊创建成功')
+  // 可以选择跳转到新创建的群聊详情页
+  // router.push(`/mobile/group/${newGroup.id}`)
+}
+
 // 初始化数据
 onMounted(() => {
   const groupId = route.params.id as string
@@ -399,6 +478,13 @@ onMounted(() => {
   cursor: pointer;
   position: absolute;
   left: 16px;
+}
+
+.add-icon {
+  font-size: 20px;
+  cursor: pointer;
+  position: absolute;
+  right: 16px;
 }
 
 .detail-content {
@@ -451,14 +537,20 @@ onMounted(() => {
 .action-buttons {
   display: flex;
   flex-direction: column;
-  gap: 12px;
+  gap: 8px;
   width: 100%;
+}
+
+.owner-actions {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 8px;
 }
 
 .action-button {
   width: 100%;
-  height: 48px;
-  font-size: 16px;
+  height: 40px;
+  font-size: 14px;
 }
 
 .dialog-content {

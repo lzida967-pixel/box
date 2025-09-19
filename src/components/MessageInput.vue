@@ -78,6 +78,7 @@ import { ElMessage } from 'element-plus'
 
 const emit = defineEmits<{
   send: [content: string]
+  'send-image': [files: File[]]
 }>()
 
 const inputRef = ref()
@@ -191,10 +192,8 @@ const handleImageSelect = (event: Event) => {
   const target = event.target as HTMLInputElement
   const files = target.files
   if (files && files.length > 0) {
-    for (const file of files) {
-      ElMessage.success(`选择了图片: ${file.name}`)
-      // 这里可以处理图片上传逻辑
-    }
+    // 向父组件抛出文件列表，由父组件负责真正的上传与发送
+    emit('send-image', Array.from(files))
   }
   target.value = '' // 清空选择
 }

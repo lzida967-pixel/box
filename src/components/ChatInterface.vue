@@ -854,6 +854,9 @@ onUnmounted(() => {
 .message-text {
   line-height: 1.4;
   font-size: 14px;
+  white-space: pre-wrap; /* 保留空格和换行，自动换行 */
+  word-break: break-word; /* 长单词或URL强制换行 */
+  overflow-wrap: break-word; /* 确保长内容正确换行 */
 }
 
 .message-status {

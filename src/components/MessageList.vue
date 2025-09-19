@@ -59,7 +59,7 @@
 
           <!-- 自己的头像 -->
           <div v-if="isOwnMessage(message)" class="message-avatar">
-            <el-avatar :src="chatStore.currentUser?.avatar" :size="36" />
+            <el-avatar :src="getOwnAvatar()" :size="36" />
           </div>
         </div>
       </div>
@@ -82,6 +82,7 @@ import { ref, computed, nextTick, watch } from 'vue'
 import { useChatStore } from '@/stores/chat'
 import type { Message } from '@/types'
 import { imageApi } from '@/api'
+import { getUserAvatarUrl } from '@/utils/avatar'
 import dayjs from 'dayjs'
 
 interface Props {
@@ -113,7 +114,12 @@ const getSenderAvatar = (message: Message) => {
   // 使用正确的字段名：fromUserId（兼容senderId）
   const senderId = message.fromUserId || message.senderId
   const sender = chatStore.getContactById(senderId)
-  return sender?.avatar || 'https://avatars.githubusercontent.com/u/0?v=4'
+  return getUserAvatarUrl(sender)
+}
+
+// 获取自己的头像
+const getOwnAvatar = () => {
+  return getUserAvatarUrl(chatStore.currentUser)
 }
 
 // 检查是否为群聊消息
@@ -193,17 +199,27 @@ watch(showTypingIndicator, () => {
 
 .message-item {
   display: flex;
-  gap: 8px;
+  gap: 0;
   max-width: 70%;
 }
 
 .own-message .message-item {
-  flex-direction: row-reverse;
+  flex-direction: row;
 }
 
 .message-avatar {
   flex-shrink: 0;
   align-self: flex-end;
+}
+
+.own-message .message-avatar {
+  margin-left: 8px;
+  margin-right: 0;
+}
+
+.message-wrapper:not(.own-message) .message-avatar {
+  margin-right: 8px;
+  margin-left: 0;
 }
 
 .message-content {
@@ -242,6 +258,9 @@ watch(showTypingIndicator, () => {
 .message-text {
   line-height: 1.4;
   font-size: 14px;
+  white-space: pre-wrap; /* 保留空格和换行，自动换行 */
+  word-break: break-word; /* 长单词或URL强制换行 */
+  overflow-wrap: break-word; /* 确保长内容正确换行 */
 }
 
 .sender-name {

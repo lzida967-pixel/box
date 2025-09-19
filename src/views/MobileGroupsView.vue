@@ -38,7 +38,7 @@
             {{ (group.remark || group.name).charAt(0) }}
           </el-avatar>
           <el-badge
-            v-if="group.unreadCount && group.unreadCount > 0"
+            v-if="group.unreadCount > 0"
             :value="group.unreadCount"
             :max="99"
             class="unread-badge"
@@ -85,6 +85,7 @@ import { ref, computed, onMounted, onUnmounted } from 'vue'
 import { useRouter } from 'vue-router'
 import { ElMessage } from 'element-plus'
 import { useAuthStore } from '@/stores/auth'
+import { useChatStore } from '@/stores/chat'
 import { groupApi } from '@/api'
 import CreateGroupDialog from '@/components/groups/dialogs/CreateGroupDialog.vue'
 import type { ChatGroup } from '@/types'
@@ -92,6 +93,7 @@ import dayjs from 'dayjs'
 
 const router = useRouter()
 const authStore = useAuthStore()
+const chatStore = useChatStore()
 const searchText = ref('')
 const showCreateGroupDialog = ref(false)
 const loading = ref(true)
@@ -100,13 +102,35 @@ let refreshInterval: number | null = null
 // 群组列表（模拟与电脑端GroupsPage.vue相似的数据结构）
 const groups = ref<ChatGroup[]>([])
 
-// 显示的群聊列表
+/**
+ * 将接口群组数据增强为带未读数/最后消息/时间的展示数据，
+ * 数据源来自 chatStore（与 Web 端保持一致）
+ */
+const enhancedGroups = computed(() => {
+  return groups.value.map(g => {
+    const convId = `group_${g.id}`
+    const conv = chatStore.conversations.find(c => c.id === convId)
+    const msgs = chatStore.messages[convId] || []
+    const lastMsg = conv?.lastMessage || (msgs.length > 0 ? msgs[msgs.length - 1] : undefined)
+    const lastMessageTime = lastMsg ? (lastMsg.sendTime || lastMsg.createTime || (lastMsg as any).timestamp) : g.updatedAt
+    const unreadCount = conv?.unreadCount || 0
+    return {
+      ...g,
+      unreadCount,
+      lastMessage: lastMsg,
+      lastMessageTime
+    }
+  })
+})
+
+// 显示的群聊列表（带搜索过滤）
 const displayGroups = computed(() => {
-  if (!searchText.value) return groups.value
-  
-  return groups.value.filter(group => 
-    (group.remark || group.name).toLowerCase().includes(searchText.value.toLowerCase()) ||
-    group.description?.toLowerCase().includes(searchText.value.toLowerCase())
+  const list = enhancedGroups.value
+  if (!searchText.value) return list
+  const kw = searchText.value.toLowerCase()
+  return list.filter(group => 
+    (group.remark || group.name).toLowerCase().includes(kw) ||
+    group.description?.toLowerCase().includes(kw)
   )
 })
 
@@ -198,12 +222,20 @@ const groupAvatarCache = ref<Map<number, string>>(new Map())
 // 获取群头像
 const getGroupAvatar = (group: ChatGroup) => {
   // 检查多个可能的头像字段
-  const avatar = group.avatar // 移除了不存在的groupAvatar字段
+  const avatar = group.avatar
   
   if (avatar) {
     // 如果是base64格式的图片数据
     if (avatar.startsWith('data:image/')) {
       return avatar
+    }
+    // 如果是完整的HTTP URL
+    if (avatar.startsWith('http://') || avatar.startsWith('https://')) {
+      return avatar
+    }
+    // 如果是相对路径，补全为完整URL
+    if (avatar.startsWith('/')) {
+      return `http://localhost:8080${avatar}`
     }
   }
   
@@ -223,22 +255,36 @@ const getGroupAvatar = (group: ChatGroup) => {
 // 异步加载群头像
 const loadGroupAvatar = async (groupId: number) => {
   try {
+    // 获取当前用户的token
+    const token = authStore.currentUser?.token || authStore.userInfo?.token || localStorage.getItem('token') || ''
+    
     const response = await fetch(`http://localhost:8080/api/group/${groupId}/avatar`, {
       headers: {
-        'Authorization': `Bearer ${authStore.currentUser?.token || authStore.userInfo?.token || ''}`
+        'Authorization': `Bearer ${token}`,
+        'Content-Type': 'application/json'
       }
     })
     
     if (response.ok) {
       const blob = await response.blob()
-      const reader = new FileReader()
-      reader.onload = () => {
-        const base64 = reader.result as string
-        groupAvatarCache.value.set(groupId, base64)
+      if (blob.size > 0) {
+        const reader = new FileReader()
+        reader.onload = () => {
+          const base64 = reader.result as string
+          groupAvatarCache.value.set(groupId, base64)
+        }
+        reader.onerror = () => {
+          console.error('读取头像文件失败')
+          groupAvatarCache.value.set(groupId, '')
+        }
+        reader.readAsDataURL(blob)
+      } else {
+        // 空文件，缓存空字符串
+        groupAvatarCache.value.set(groupId, '')
       }
-      reader.readAsDataURL(blob)
     } else {
       // 头像不存在或无权限访问，缓存空字符串避免重复请求
+      console.warn(`群头像加载失败: ${response.status} ${response.statusText}`)
       groupAvatarCache.value.set(groupId, '')
     }
   } catch (error) {
@@ -250,13 +296,12 @@ const loadGroupAvatar = async (groupId: number) => {
 // 获取最后消息文本
 const getLastMessageText = (message: any) => {
   if (!message) return ''
-  
-  if (message.messageType === 2) {
+  const type = message.messageType
+  if (type === 2 || type === 'image') {
     return '[图片]'
-  } else if (message.messageType === 3) {
+  } else if (type === 3 || type === 'file') {
     return '[文件]'
   }
-  
   return message.content?.length > 30 
     ? message.content.substring(0, 30) + '...' 
     : message.content || ''

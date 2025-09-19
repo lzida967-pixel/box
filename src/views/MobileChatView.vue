@@ -29,6 +29,7 @@
     <!-- 消息输入 -->
     <MessageInput 
       @send="handleSendMessage"
+      @send-image="handleSendImages"
       class="message-input"
     />
     
@@ -46,6 +47,8 @@ import { useRouter, useRoute } from 'vue-router'
 import ElMessage from 'element-plus/es/components/message/index.mjs'
 import ElMessageBox from 'element-plus/es/components/message-box/index.mjs'
 import { useChatStore } from '@/stores/chat'
+import { useAuthStore } from '@/stores/auth'
+import { chatApi } from '@/api'
 import MessageList from '@/components/MessageList.vue'
 import MessageInput from '@/components/MessageInput.vue'
 import ContactInfo from '@/components/ContactInfo.vue'
@@ -55,6 +58,7 @@ import { ArrowLeft, More } from '@element-plus/icons-vue'
 const router = useRouter()
 const route = useRoute()
 const chatStore = useChatStore()
+const authStore = useAuthStore()
 const showMenu = ref(false)
 const showContactInfoDialog = ref(false)
 
@@ -118,9 +122,139 @@ const handleSendMessage = (content: string) => {
     ElMessage.warning('不能发送空消息')
     return
   }
-  
-  // 使用chatStore.sendWebSocketMessage发送消息，与电脑端保持一致
   chatStore.sendWebSocketMessage(content)
+}
+
+// 处理发送图片（来自 MessageInput）
+const handleSendImages = async (files: File[]) => {
+  if (!chatStore.activeConversationId || !files?.length) return
+  const conv = chatStore.activeConversation
+  const me = authStore.userInfo?.id
+  if (!conv || !me) return
+
+  try {
+    for (const file of files) {
+      if (conv.type === 'group') {
+        await handleGroupImageSend(file)
+      } else {
+        await handlePrivateImageSend(file, me)
+      }
+    }
+  } catch (e) {
+    console.error(e)
+    ElMessage.error('图片发送失败')
+  }
+}
+
+// 私聊图片发送（与 Web 端保持一致）
+const handlePrivateImageSend = async (file: File, me: number) => {
+  const friendIdStr = chatStore.activeConversation?.participantIds.find((id: string) => id !== String(me))
+  if (!friendIdStr) return
+  const friendId = parseInt(friendIdStr)
+
+  const tempId = Date.now() + Math.random()
+  const optimistic: Message = {
+    id: tempId as any,
+    fromUserId: me,
+    toUserId: friendId,
+    content: '__uploading__',
+    messageType: 'image',
+    status: 'sending',
+    sendTime: new Date().toISOString(),
+    createTime: new Date().toISOString(),
+    updateTime: new Date().toISOString(),
+    senderId: me,
+    receiverId: friendId
+  }
+  if (!chatStore.messages[chatStore.activeConversationId!]) {
+    ;(chatStore as any).messages[chatStore.activeConversationId!] = []
+  }
+  ;(chatStore as any).messages[chatStore.activeConversationId!].push(optimistic)
+
+  try {
+    const resp = await chatApi.sendImage(friendId, file)
+    if ((resp as any).code === 200 && (resp as any).data) {
+      const serverMsg = (resp as any).data as any
+      const imageContent = serverMsg.content ?? serverMsg.imageId ?? serverMsg.data?.imageId ?? serverMsg.data?.filename ?? file.name
+      const list = (chatStore as any).messages[chatStore.activeConversationId!] as Message[]
+      const found = list.find(m => m.id === tempId)
+      if (found) {
+        found.id = serverMsg.id ?? found.id
+        found.status = 'delivered'
+        found.messageType = 'image'
+        found.content = String(imageContent)
+        found.updateTime = new Date().toISOString()
+      }
+    } else {
+      throw new Error('私聊图片发送失败')
+    }
+  } catch (error) {
+    console.error('私聊图片发送失败:', error)
+    const list = (chatStore as any).messages[chatStore.activeConversationId!] as Message[]
+    const found = list.find(m => m.id === tempId)
+    if (found) {
+      found.status = 'sent'
+      found.content = '图片发送失败'
+    }
+    throw error
+  }
+}
+
+// 群聊图片发送（与 Web 端保持一致）
+const handleGroupImageSend = async (file: File) => {
+  const me = authStore.userInfo?.id
+  if (!me) return
+  const groupId = parseInt(chatStore.activeConversationId!.replace('group_', ''))
+  if (isNaN(groupId)) {
+    console.error('无效的群ID:', chatStore.activeConversationId)
+    return
+  }
+
+  const tempId = Date.now() + Math.random()
+  const optimistic: Message = {
+    id: tempId as any,
+    fromUserId: me,
+    groupId,
+    content: '__uploading__',
+    messageType: 'image',
+    status: 'sending',
+    sendTime: new Date().toISOString(),
+    createTime: new Date().toISOString(),
+    updateTime: new Date().toISOString(),
+    senderId: me
+  }
+  if (!chatStore.messages[chatStore.activeConversationId!]) {
+    ;(chatStore as any).messages[chatStore.activeConversationId!] = []
+  }
+  ;(chatStore as any).messages[chatStore.activeConversationId!].push(optimistic)
+
+  try {
+    const resp = await chatApi.sendGroupImage(groupId, file)
+    if ((resp as any).code === 200 && (resp as any).data) {
+      const serverMsg = (resp as any).data as any
+      const imageContent = serverMsg.content ?? serverMsg.imageId ?? serverMsg.data?.imageId ?? serverMsg.data?.filename ?? file.name
+      const list = (chatStore as any).messages[chatStore.activeConversationId!] as Message[]
+      const found = list.find(m => m.id === tempId)
+      if (found) {
+        found.id = serverMsg.id ?? found.id
+        found.status = 'delivered'
+        found.messageType = 'image'
+        found.content = String(imageContent)
+        found.updateTime = new Date().toISOString()
+      }
+    } else {
+      throw new Error('群聊图片发送失败')
+    }
+  } catch (error) {
+    console.error('群聊图片发送失败:', error)
+    const list = (chatStore as any).messages[chatStore.activeConversationId!] as Message[]
+    const found = list.find(m => m.id === tempId)
+    if (found) {
+      found.status = 'sent'
+      found.content = '图片发送失败'
+    }
+    throw error
+  }
 }
 
 // 清空聊天记录
@@ -187,6 +321,10 @@ const handleClickOutside = (event: MouseEvent) => {
 
 // 生命周期
 onMounted(() => {
+  // 确保WebSocket连接已建立，实时接收消息与未读数更新（与Web端一致）
+  chatStore.initWebSocket().catch((error: any) => {
+    console.error('WebSocket连接失败:', error)
+  })
   initializeChat()
   document.addEventListener('click', handleClickOutside)
 })

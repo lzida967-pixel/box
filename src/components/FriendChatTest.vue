@@ -387,6 +387,9 @@ onUnmounted(() => {
 
 .message-content {
   margin-bottom: 4px;
+  white-space: pre-wrap; /* 保留空格和换行，自动换行 */
+  word-break: break-word; /* 长单词或URL强制换行 */
+  overflow-wrap: break-word; /* 确保长内容正确换行 */
 }
 
 .message-time {
