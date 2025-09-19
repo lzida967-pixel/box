@@ -47,6 +47,7 @@ public interface GroupMemberMapper {
      */
     GroupMember selectMemberByGroupAndUser(@Param("groupId") Long groupId, @Param("userId") Long userId);
 
+
     /**
      * 查询用户在指定群组中的成员信息（包括已删除的记录）
      */
